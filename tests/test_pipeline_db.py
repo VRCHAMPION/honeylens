@@ -132,3 +132,22 @@ def test_loopback_healthcheck_events_ignored(clean_db, tmp_path):
     t = make_pipeline(clean_db, tmp_path).drain()
     assert t.ignored == 2 and t.inserted == 1
     assert q(clean_db, "SELECT sum(ignored) FROM honeylens.pipeline_stats")[0][0] == 2
+
+
+def test_session_duration_grows_per_batch(clean_db, tmp_path):
+    log = tmp_path / "cowrie.json"
+    s = "dur0001"
+    log.write_text(ev(s, "cowrie.session.connect", "2026-10-04T10:00:00Z") + "\n"
+                   + ev(s, "cowrie.command.input", "2026-10-04T10:00:05Z", input="id") + "\n")
+    p = make_pipeline(clean_db, tmp_path)
+    p.drain()
+    sql = "SELECT duration_s FROM honeylens.sessions WHERE session_id=%s"
+    assert q(clean_db, sql, s)[0][0] == 5.0
+    with open(log, "a") as fh:
+        fh.write(ev(s, "cowrie.command.input", "2026-10-04T10:00:40Z", input="uname -a") + "\n")
+    p.drain()
+    assert q(clean_db, sql, s)[0][0] == 40.0  # was frozen at the first batch's span before
+    with open(log, "a") as fh:
+        fh.write(ev(s, "cowrie.session.closed", "2026-10-04T10:00:41Z", duration=41.5) + "\n")
+    p.drain()
+    assert q(clean_db, sql, s)[0][0] == 41.5
