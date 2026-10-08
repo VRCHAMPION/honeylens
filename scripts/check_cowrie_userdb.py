@@ -2,7 +2,11 @@
 
 Usage (from repo root):
   docker run --rm -v "$PWD/cowrie/userdb.txt:/cowrie/cowrie-git/etc/userdb.txt:ro" \
-    -v "$PWD/scripts/check_cowrie_userdb.py:/tmp/check.py:ro" cowrie/cowrie:3.1.1 /tmp/check.py
+    -v "$PWD/scripts/check_cowrie_userdb.py:/tmp/check.py:ro" \
+    "$(docker compose config --images | grep '^cowrie/')" /tmp/check.py
+
+The image is whatever docker-compose.yml pins, so this always tests the Cowrie
+version that actually runs.
 """
 import sys
 
