@@ -211,3 +211,55 @@ def test_mask_ips_covers_urls_commands_without_db():
     assert "198.51.100.23" not in exports.dumps(stix)
     # without masking the report still shows the (defanged) address
     assert "198[.]51[.]100[.]23" in render_html(d, mask_ips=False)
+
+
+def test_masked_exports_merge_collapsed_urls_and_agree():
+    from datetime import timedelta
+
+    from honeylens.reporting.data import ReportData, Window
+    end = datetime(2026, 10, 5, tzinfo=UTC)
+    early, late = end - timedelta(days=3), end - timedelta(days=1)
+    d = ReportData(window=Window(end - timedelta(days=7), end), data_filter="all",
+                   ioc_urls=[{"url": "http://198.51.100.23/x.sh", "attempts": 2, "first_seen": late,
+                              "last_seen": late, "simulated": False},
+                             {"url": "http://198.51.100.24/x.sh", "attempts": 5, "first_seen": early,
+                              "last_seen": early, "simulated": False}])
+    rows = [r for r in exports.to_csv(d, mask_ips=True).splitlines() if r.startswith("url,")]
+    assert len(rows) == 1 and ",7," in rows[0]
+    stix = exports.to_stix(d, mask_ips=True)
+    inds = [o for o in stix["objects"] if o["type"] == "indicator"]
+    assert len(inds) == 1 and inds[0]["description"] == "7 attempts"
+    assert inds[0]["valid_from"].startswith(early.strftime("%Y-%m-%d"))
+    merged = exports.url_iocs(d, mask_ips=True)[0]
+    assert merged["first_seen"] == early and merged["last_seen"] == late
+    # unmasked: both URLs kept
+    assert len(exports.url_iocs(d)) == 2
+
+
+def test_masked_report_masks_ips_inside_credentials_and_takeaways():
+    from datetime import timedelta
+
+    from honeylens.reporting.data import ReportData, Window
+    from honeylens.reporting.render import takeaways
+    end = datetime(2026, 10, 5, tzinfo=UTC)
+    d = ReportData(window=Window(end - timedelta(days=7), end), data_filter="all",
+                   totals={"login_attempts": 3},
+                   usernames=[{"username": "admin@198.51.100.77", "attempts": 3}],
+                   passwords=[{"password": "pw203.0.113.9", "attempts": 3}])
+    html = render_html(d, mask_ips=True)
+    assert "198.51.100.77" not in html and "203.0.113.9" not in html
+    assert "admin@198.51.100.x" in html and "pw203.0.113.x" in html  # the guess itself stays visible
+    assert "198.51.100.77" not in " ".join(takeaways(d, mask_ips=True))
+    assert "admin@198.51.100.77" in render_html(d, mask_ips=False)
+
+
+def test_report_csp_blocks_base_and_forms():
+    from datetime import timedelta
+
+    from honeylens.reporting.data import ReportData, Window
+    end = datetime(2026, 10, 5, tzinfo=UTC)
+    html = render_html(ReportData(window=Window(end - timedelta(days=7), end), data_filter="all"))
+    csp = html.split('http-equiv="Content-Security-Policy" content="', 1)[1].split('"', 1)[0]
+    for directive in ("default-src 'none'", "base-uri 'none'", "form-action 'none'"):
+        assert directive in csp
+    assert "<script" not in html.lower()
