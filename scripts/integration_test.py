@@ -208,8 +208,14 @@ def main() -> int:
     record("9c pipeline runs as uid 10001", "uid=10001" in pipe_user, pipe_user)
 
     # 10. Grafana + report
-    g = sh(sys.executable, "scripts/check_grafana.py", check=False)
-    record("10a Grafana datasource + all panels return data", "PASS" in g.splitlines()[-1], g.splitlines()[-1])
+    grafana = subprocess.run([sys.executable, "scripts/check_grafana.py"], cwd=ROOT,
+                             capture_output=True, text=True, timeout=900)
+    grafana_output = (grafana.stdout + grafana.stderr).splitlines()
+    grafana_output = [line for line in grafana_output if line.strip()]
+    grafana_summary = grafana_output[-1] if grafana_output else f"no output (exit {grafana.returncode})"
+    grafana_ok = grafana.returncode == 0 and grafana_summary.startswith("PASS:")
+    record("10a Grafana datasource + all panels return data", grafana_ok,
+           f"(exit {grafana.returncode}; {grafana_summary})")
     (ROOT / "out").mkdir(exist_ok=True)
     rep = sh("docker", "compose", "--profile", "tools", "run", "--rm", "-e", "HL_DB_USER=hl_report", "-u",
              f"{os.getuid() if hasattr(os, 'getuid') else 10001}:{os.getgid() if hasattr(os, 'getgid') else 10001}",
