@@ -29,7 +29,7 @@ Elevation of privilege) applied to each component.
 |---|---|---|---|
 | T1 | Attacker escapes Cowrie's emulated shell to the container (E) | Cowrie never executes commands (emulation); non-root uid 999, read-only rootfs, `cap_drop: ALL`, `no-new-privileges`, PID/memory limits | Cowrie/Twisted 0-day - keep image pinned AND updated |
 | T2 | Container escape to host (E) | no privileged mode, no Docker socket, no host network | kernel 0-day; use a dedicated VM (cloud rule) |
-| T3 | Honeypot used to attack others / download malware (T, legal) | Laptop edge network is internal; Cowrie `out_addr=127.0.0.1`; cloud DOCKER-USER + INPUT egress DROP; forwarding/tunnelling off | misconfigured cloud firewall - verify with `deploy/verify-egress.sh` (local targets only) |
+| T3 | Honeypot used to attack others / download malware (T, legal) | Laptop edge network has no outbound NAT (masquerade off); Cowrie `out_addr=127.0.0.1`; cloud DOCKER-USER + INPUT egress DROP; forwarding/tunnelling off | misconfigured cloud firewall - verify with `deploy/verify-egress.sh` (local targets only) |
 | T3b | Attacker reaches the real admin SSH (S/E) | sshd on 22022, keys only, no root; reached over Tailscale or a cloud bastion with no public ingress rule | fallback C (22022 from your IP/32) is still public - use only temporarily |
 | T4 | Hostile log content -> SQL injection (T) | parameterized queries only | none known; tested with injection payloads |
 | T5 | Hostile content -> XSS in report/Grafana (I/E) | Jinja2 autoescape, CSP, no JS; Grafana escapes table cells | Grafana bug; Grafana is loopback/tunnel only |
@@ -54,8 +54,8 @@ honeypots (real VMs); legal advice for your jurisdiction (read your cloud provid
 ## In short
 
 Modelled with STRIDE. The biggest risks are the honeypot being used against third parties and
-hostile log content attacking the analyst. In laptop mode the Cowrie side uses an internal network;
-in cloud mode host firewall rules block Cowrie egress. Containers are non-root and mostly read-only,
+hostile log content attacking the analyst. In laptop mode the Cowrie network has no outbound NAT
+(masquerade off); in cloud mode host firewall rules (persisted by a systemd unit) also block Cowrie egress. Containers are non-root and mostly read-only,
 the DB roles for viewing are read-only, every query is parameterized, and the report is escaped with
-a strict CSP and no JavaScript. The pipeline has optional outbound access for IPInfo only when its
-token is configured.
+a strict CSP and no JavaScript. The pipeline has outbound access for IPInfo only when the
+operator adds the `docker-compose.enrich.yml` override (and sets a token).
