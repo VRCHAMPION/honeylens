@@ -29,6 +29,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from honeylens.config import _env_bool
 from honeylens.logutil import setup_logging
 
 log = logging.getLogger("honeylens.report.scheduler")
@@ -127,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--tz", default=os.environ.get("HL_REPORT_TZ", DEFAULT_TZ))
     p.add_argument("--print-next", action="store_true", help="print the next run time and exit")
     p.add_argument("--run-now", action="store_true", help="generate one report now (same code path) and exit")
-    p.add_argument("--mask-ips", action="store_true", default=os.environ.get("HL_REPORT_MASK_IPS", "").lower() == "true")
+    p.add_argument("--mask-ips", action="store_true", default=_env_bool("HL_REPORT_MASK_IPS", False))
     args = p.parse_args(argv)
     setup_logging()
     try:
