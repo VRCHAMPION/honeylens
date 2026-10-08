@@ -209,7 +209,7 @@ def main() -> int:
 
     # 10. Grafana + report
     grafana = subprocess.run([sys.executable, "scripts/check_grafana.py"], cwd=ROOT,
-                             capture_output=True, text=True, timeout=900)
+                             capture_output=True, text=True, timeout=900)  # noqa: S603,S607  # nosec B603 B607
     grafana_output = (grafana.stdout + grafana.stderr).splitlines()
     grafana_output = [line for line in grafana_output if line.strip()]
     grafana_summary = grafana_output[-1] if grafana_output else f"no output (exit {grafana.returncode})"
