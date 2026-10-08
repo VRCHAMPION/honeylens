@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch/PR cancels the run that is still going.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   TRIVY_IMAGE: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
   HADOLINT_IMAGE: hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
@@ -23,6 +28,7 @@ jobs:
   lint:
     name: lint + static security checks
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -43,6 +49,7 @@ jobs:
   test:
     name: pytest + coverage
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:18.6-trixie
@@ -75,8 +82,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: create .env with random secrets (never committed)
         run: python3 scripts/make_env.py
-      - name: Docker Compose config validation (laptop + cloud)
-        run: docker compose config -q && docker compose -f docker-compose.yml -f docker-compose.cloud.yml config -q
+      - name: Docker Compose config validation (laptop + cloud + opt-in enrichment egress)
+        run: |
+          docker compose config -q
+          docker compose -f docker-compose.yml -f docker-compose.cloud.yml config -q
+          docker compose -f docker-compose.yml -f docker-compose.enrich.yml config -q
+          docker compose -f docker-compose.yml -f docker-compose.cloud.yml -f docker-compose.enrich.yml config -q
       - name: loopback-only port exposure check
         run: python3 scripts/check_ports.py && python3 scripts/check_ports.py -f docker-compose.yml -f docker-compose.cloud.yml --cloud
       - name: build image
@@ -100,6 +111,17 @@ jobs:
         run: pip install -e . stix2==3.0.2
       - name: full integration test (clean volumes, real Cowrie + PostgreSQL + Grafana)
         run: python3 scripts/integration_test.py
+      - name: published ports answer on the HOST (127.0.0.1:3000 Grafana, 127.0.0.1:2222 Cowrie)
+        run: |
+          set -eu
+          docker compose port grafana 3000
+          docker compose port cowrie 2222
+          curl -fsS --retry 10 --retry-delay 3 --retry-all-errors http://127.0.0.1:3000/api/health
+          echo
+          banner="$(timeout 10 bash -c 'exec 3<>/dev/tcp/127.0.0.1/2222 && head -c 7 <&3')"
+          echo "cowrie banner: $banner"
+          test "$banner" = "SSH-2.0"
+          python3 scripts/check_ports.py --live
       - name: no generated secret value in evidence, logs or the release ZIP
         run: |
           python3 scripts/check_secrets_exposure.py . --allow-local-env --env .env
@@ -111,6 +133,7 @@ jobs:
   secrets:
     name: gitleaks (secret scan of the full history)
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
