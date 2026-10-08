@@ -10,6 +10,8 @@
 #   * PostgreSQL stays unpublished on the internal network.
 #   * Cowrie gets its own fixed subnet so deploy/egress-lockdown.sh can block ALL
 #     outbound traffic from it with host firewall rules (DOCKER-USER chain).
+#     The subnet also has IP masquerading off (no outbound NAT), so Cowrie has
+#     no working route out even before those firewall rules are loaded.
 #   * Tighter resource limits for a small free-tier VM.
 
 services:
@@ -39,3 +41,4 @@ networks:
         - subnet: 172.31.250.0/24     # fixed so the egress firewall rule can target it
     driver_opts:
       com.docker.network.bridge.name: hl-cowrie0
+      com.docker.network.bridge.enable_ip_masquerade: "false"
