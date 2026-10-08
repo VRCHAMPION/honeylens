@@ -37,6 +37,8 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
+from honeylens.enrich.countries import country_name
+
 log = logging.getLogger("honeylens.enrich")
 
 DOC_NETS = [
@@ -270,10 +272,13 @@ class IPInfoProvider:
                 lat, lon = (float(x) for x in data["loc"].split(",", 1))
             except ValueError:
                 lat = lon = None
+        code = str(data.get("country") or "")[:2].upper()
         return GeoInfo(
             ip=ip,
-            country_code=str(data.get("country") or "")[:2],
-            country=str(data.get("country") or "")[:64],
+            country_code=code,
+            # Store the full English name like the MMDB providers do ("United States",
+            # not "US"), so the country column never mixes codes and names.
+            country=(str(data.get("country_name") or "") or country_name(code))[:64],
             city=str(data.get("city") or "")[:64],
             asn=asn,
             as_org=org[:128],
