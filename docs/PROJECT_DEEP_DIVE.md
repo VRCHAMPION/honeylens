@@ -39,12 +39,14 @@ flowchart LR
     R --> O[HTML, CSV, STIX, Navigator]
 ```
 
-In laptop Compose mode, Cowrie, the live simulator, and Grafana share an internal `edge` network.
-The pipeline reads Cowrie's volume rather than sharing Cowrie's network, and the pipeline alone
-also joins an ordinary `egress` network for optional IPInfo lookups. PostgreSQL is on the separate
-internal `backend` network. This network arrangement is checked statically by a unit test; actual
-Docker routing and published-port behavior were **UNVERIFIED** in this audit because Docker was
-unavailable. The cloud Compose override gives Cowrie its own fixed subnet for host firewall rules.
+In laptop Compose mode, Cowrie and the live simulator share the `edge` network and Grafana has its
+own `ui` network. Both are bridges with IP masquerading off: published loopback ports work, but there
+is no outbound NAT. (An earlier version used `internal: true` here, which made Docker silently skip
+the published ports.) The pipeline reads Cowrie's volume rather than sharing Cowrie's network, and it
+joins an ordinary `egress` network only with the opt-in `docker-compose.enrich.yml` override for
+IPInfo lookups. PostgreSQL is on the separate internal `backend` network. The arrangement is checked
+statically by unit tests, and the CI integration job checks from the host that 127.0.0.1:3000 and
+127.0.0.1:2222 answer. The cloud Compose override gives Cowrie its own fixed subnet for host firewall rules.
 
 ## Complete data flow: one SSH session
 
@@ -108,7 +110,7 @@ unavailable. The cloud Compose override gives Cowrie its own fixed subnet for ho
 | Gitleaks | Secret-pattern scanner over the full Git history in CI, with a generated-token canary check. | Detects likely credentials that ordinary file ignores cannot catch after a commit. | TruffleHog is an alternative; both can have false positives and need history access. The local workspace has no history, but the directory scan and canary checks can run. |
 | Hadolint | Dockerfile linter. | Checks Dockerfile construction practices in CI. | BuildKit checks and manual review complement it; lint is not runtime validation. |
 | Trivy | Image and dependency vulnerability scanner. | CI reports image HIGH/CRITICAL findings and fails on fixable CRITICAL findings in the project image. | Grype or vendor scanners are alternatives; findings depend on image freshness and vulnerability databases. |
-| GitHub Actions | Hosted workflow runner. | Runs pinned lint, test, image, integration, and secret-scan jobs on pushes and pull requests. | Self-hosted CI gives infrastructure control but adds maintenance; hosted execution is **UNVERIFIED** from this workspace. |
+| GitHub Actions | Hosted workflow runner. | Runs pinned lint, test, image, integration, and secret-scan jobs on pushes and pull requests. | Self-hosted CI gives infrastructure control but adds maintenance. |
 | ShellCheck | Shell script linter. | CI checks shell scripts for common errors. | Manual shell review remains needed; this executable was unavailable locally. |
 
 ## Security architecture
@@ -150,9 +152,9 @@ Live simulator targets are limited to loopback, configured Compose service names
 private addresses, or exact operator allow-list entries. An unapproved hostname is rejected before
 DNS resolution. The allow-list is powerful: adding a host authorizes a connection, so configure it
 only for a system you control. Synthetic mode uses no network. Optional IPInfo enrichment is off
-without a token; if enabled, it sends public attacker source IPs to that provider. Only the pipeline
-joins the laptop egress network, and this multi-homed behavior still needs runtime Compose
-verification.
+without a token; if enabled, it sends public attacker source IPs to that provider. The pipeline has
+no outbound network at all unless the operator also adds the `docker-compose.enrich.yml` override,
+which attaches only the pipeline to an `egress` network.
 
 ## Detection engineering
 
@@ -279,24 +281,22 @@ roles/pipeline/report flows. Database fixtures require `HL_TEST_PG`; Compose tes
 rotation, hostile lines, roles, Grafana, reports, scheduler, and fail-closed secrets. It begins by
 running `docker compose down -v` unless `--keep` is used, so it can delete local Docker volumes.
 
-On 2026-10-08, pytest collected 373 cases on Windows with Python 3.11.9: 321 passed and 52 skipped.
-The 29 PostgreSQL cases were skipped because no test database was configured; 22 Docker/Compose
-checks were skipped because Docker was unavailable; one symlink test skipped because Windows
-symlink privileges were unavailable. The combined local line/branch coverage was 63.98% (64% rounded) with those
-integration checks absent. This does not verify the CI workflow's 80% coverage gate.
-
 The GitHub workflow pins actions to commit SHAs and scanner images to digests, uses read-only
 workflow permissions, and defines separate lint, test, Compose/integration/image-scan, and Gitleaks
-jobs. **UNVERIFIED — GitHub-hosted workflow execution.**
+jobs. The release commit's hosted run
+([37808655086](https://github.com/VRCHAMPION/honeylens/actions/runs/37808655086)) passed all four:
+the PostgreSQL-backed test job ran 373 tests with 85.69% line + branch coverage (gate: 80%), and
+the Docker job ran the full integration script. Without `HL_TEST_PG` or Docker, the database and
+Compose cases are reported as skipped, so a plain local `pytest` shows lower coverage than CI.
 
 ## Performance
 
 `scripts/perf_test.py` measures ingestion into PostgreSQL with generated events and prints machine,
 Python, event count, elapsed rate, session rate, and a simple query latency. It creates a uniquely
 named temporary database and drops it afterward; the supplied `HL_TEST_PG` account needs create
-and drop database rights. It was not run in this environment because PostgreSQL was unavailable.
-The README's former “about 6,400 events/second” statement has no retained output or machine record
-in this workspace and is therefore **UNVERIFIED**. Do not use it as a measured project result.
+and drop database rights. Results, with the machine they were measured on, are kept in
+[BENCHMARKS.md](BENCHMARKS.md) (about 5,100-5,900 events/s on a 2-vCPU ARM64 VM). An older
+"about 6,400 events/second" figure had no retained output and is no longer quoted.
 
 ## Limitations
 
@@ -309,11 +309,9 @@ in this workspace and is therefore **UNVERIFIED**. Do not use it as a measured p
   mapping is not attribution or proof of an actor.
 - GeoIP/ASN describe network registration and routing ownership, not a person or group.
 - Enabling IPInfo shares public source IP addresses with that third party.
-- Docker routing, migrations against a real PostgreSQL server, database role behavior, full
-  integration, cloud firewall rules, cloud billing, and GitHub-hosted workflow were **UNVERIFIED**
-  in this audit environment.
-- Local combined coverage was 63.98% (64% rounded) with database tests skipped; the GitHub workflow's 80% gate
-  remains to be observed on hosted CI.
+- Cloud firewall rules, the boot-time lockdown unit and cloud billing have not been verified on a
+  real VM. Docker routing, migrations, role behavior and the full integration run are covered by
+  hosted CI.
 
 ## Real-world applications
 
@@ -364,8 +362,9 @@ deployment verification.”
 4. Show a session's score reasons and why bot-versus-human remains a timing heuristic.
 5. Compare the five dashboards and the HTML/CSV/STIX/Navigator output; explain which values are
    simulated, what the read-only roles permit, and why IOCs are not attribution.
-6. Close with evidence: 321 passing pytest cases, 63.98% local coverage with integration skips, and
-   the Docker/database/cloud/hosted-CI checks still marked **UNVERIFIED**.
+6. Close with evidence: the hosted CI run (PostgreSQL-backed tests above the 80% coverage gate,
+   Docker integration, secret scan) and the benchmark with its machine details. Cloud egress
+   blocking is the part still to verify on a real VM.
 
 ### Difficult questions and answers
 
@@ -384,27 +383,18 @@ the previous offset available for retry.
 and use documentation IPs and reserved domains. Real cloud observations have not been verified in
 this workspace.
 
-**What is the most important remaining validation?** Run the Docker/PostgreSQL integration suite,
-observe the hosted CI coverage gate, and verify cloud egress blocking on the actual target provider
-before exposing Cowrie publicly.
+**What is the most important remaining validation?** Verify cloud egress blocking
+(`deploy/verify-egress.sh`, including after a reboot with the systemd unit) on the actual target
+provider before exposing Cowrie publicly. The Docker/PostgreSQL suite already runs in hosted CI.
 
-## Final verification - 2026-10-08
+## Verification status
 
-A fresh isolated Python 3.11.9 environment ran the full suite: **321 passed, 52 skipped**. The
-configured 80% CI coverage gate **FAILED** at **63.98%**. The missed paths are concentrated in
-migration, transactional store/runner, and database-backed reporting code whose tests require a
-PostgreSQL service. Docker-dependent Compose checks also skipped. The skip names and requirements
-are recorded in docs/FINAL_RELEASE_AUDIT.md; no tests were added merely to inflate coverage.
+* **Hosted CI (every push and pull request):** ruff, bandit, pip-audit, ShellCheck, hadolint; the
+  PostgreSQL-backed pytest suite with an 80% coverage gate; Compose config and port-policy checks,
+  Trivy, the full Docker integration test (including host-side checks that 127.0.0.1:3000 and
+  127.0.0.1:2222 answer); and a full-history Gitleaks scan with a canary.
+* **Measured with retained details:** pipeline throughput ([BENCHMARKS.md](BENCHMARKS.md)).
+* **Not yet verified:** cloud deployment, cloud egress blocking and the boot-time lockdown unit on
+  a real VM, and any real (non-simulated) attacker data.
 
-Ruff, Bandit, pip-audit, ShellCheck 0.11.0, POSIX shell syntax, working-tree Gitleaks and its
-synthetic-token canary passed. The secret exposure check found no real local values. STIX, both
-Navigator layers, and all 60 ATT&CK rules validated. The local Gitleaks Git-history command scanned
-zero commits, so historical exposure is **UNVERIFIED**.
-
-Docker/Compose, PostgreSQL migrations and role permissions, actual published ports, Grafana panel
-queries, the destructive Docker integration script, the PostgreSQL benchmark, Trivy image scans,
-and hosted GitHub Actions remain **BLOCKED** or **UNVERIFIED** because this machine has no Docker,
-PostgreSQL service, remote, or commit history. The previous about-6,400 events/second statement
-remains **UNVERIFIED**. Cloud runtime/egress also remains **UNVERIFIED**. Treat 63.98% as local coverage
-only; it does not satisfy the workflow's 80% threshold. The release audit records the final package
-and fresh-unzip checks.
+The pre-release audit notes are kept, as historical records, in [archive/](archive/).

@@ -8,8 +8,9 @@
 * **Navigator layer** - colours the ATT&CK matrix by how often each technique
   was seen; load it at https://mitre-attack.github.io/attack-navigator/.
 
-With ``mask_ips=True`` IP addresses are masked in CSV and IP indicators are
-left out of STIX entirely (a masked IP is not a valid STIX pattern).
+With ``mask_ips=True`` IP addresses are masked in CSV (including IPs inside
+URLs), IP indicators are left out of STIX entirely (a masked IP is not a valid
+STIX pattern) and IPs inside URL indicators are masked.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from honeylens.mitre.attack import navigator_layer
-from honeylens.pipeline.sanitize import mask_ip
+from honeylens.pipeline.sanitize import mask_ip, mask_ips_in_text
 from honeylens.reporting.data import ReportData
 
 NAMESPACE = uuid.UUID("6b7f2f0e-6c1e-4c0a-9a43-2d8f1f1c0a11")  # fixed => deterministic STIX IDs
@@ -60,7 +61,8 @@ def to_csv(d: ReportData, mask_ips: bool = False) -> str:
                     _stix_time(r["first_seen"]), _stix_time(r["last_seen"]), r["simulated"],
                     safe(f"max severity {r['max_severity']}; classes {','.join(c for c in r['classes'] if c)}")])
     for r in d.ioc_urls:
-        w.writerow(["url", safe(r["url"]), r["attempts"], _stix_time(r["first_seen"]), _stix_time(r["last_seen"]),
+        url = mask_ips_in_text(r["url"]) if mask_ips else r["url"]
+        w.writerow(["url", safe(url), r["attempts"], _stix_time(r["first_seen"]), _stix_time(r["last_seen"]),
                     r["simulated"], "download attempted (never fetched)"])
     for r in d.ioc_hashes:
         w.writerow(["file:sha256", r["shasum"], r["seen"], _stix_time(r["first_seen"]), "", r["simulated"], ""])
@@ -91,9 +93,14 @@ def to_stix(d: ReportData, mask_ips: bool = False) -> dict[str, Any]:
             kind = "ipv6-addr" if ":" in r["ip"] else "ipv4-addr"
             indicator(f"ip:{r['ip']}", f"Honeypot attacker IP {r['ip']}", f"[{kind}:value = '{_esc(r['ip'])}']",
                       r["first_seen"], r["simulated"], f"{r['sessions']} sessions, max severity {r['max_severity']}")
+    seen_urls: set[str] = set()
     for r in d.ioc_urls:
-        indicator(f"url:{r['url']}", "URL an attacker tried to download (never fetched)",
-                  f"[url:value = '{_esc(r['url'])}']", r["first_seen"], r["simulated"], f"{r['attempts']} attempts")
+        url = mask_ips_in_text(r["url"]) if mask_ips else r["url"]
+        if url in seen_urls:
+            continue  # two URLs can become identical once their IPs are masked
+        seen_urls.add(url)
+        indicator(f"url:{url}", "URL an attacker tried to download (never fetched)",
+                  f"[url:value = '{_esc(url)}']", r["first_seen"], r["simulated"], f"{r['attempts']} attempts")
     for r in d.ioc_hashes:
         indicator(f"sha256:{r['shasum']}", "File hash seen on honeypot",
                   f"[file:hashes.'SHA-256' = '{r['shasum']}']", r["first_seen"], r["simulated"], "")

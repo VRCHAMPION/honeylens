@@ -172,7 +172,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT tactic AS \"Tactic\", count(DISTINCT session_id) AS \"Sessions\" FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1 ORDER BY 2 DESC"
+          "rawSql": "SELECT tactic AS \"Tactic\", count(DISTINCT session_id) AS \"Sessions\" FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) GROUP BY 1 ORDER BY 2 DESC"
         }
       ],
       "fieldConfig": {
@@ -209,7 +209,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT technique_id AS \"ID\", technique_name AS \"Technique\", tactic AS \"Tactic\", count(DISTINCT session_id) AS \"Sessions\", count(*) AS \"Matches\" FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT 25"
+          "rawSql": "SELECT technique_id AS \"ID\", technique_name AS \"Technique\", tactic AS \"Tactic\", count(DISTINCT session_id) AS \"Sessions\", count(*) AS \"Matches\" FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT 25"
         }
       ],
       "fieldConfig": {
@@ -243,7 +243,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT $__timeGroupAlias(ts, 1d), technique_id AS metric, count(DISTINCT session_id) AS value FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) AND technique_id IN (SELECT technique_id FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1 ORDER BY count(*) DESC LIMIT 6) GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT $__timeGroupAlias(ts, 1d), technique_id AS metric, count(DISTINCT session_id) AS value FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) AND technique_id IN (SELECT technique_id FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) GROUP BY 1 ORDER BY count(*) DESC LIMIT 6) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -277,7 +277,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT coalesce(actor_type,'unknown') AS metric, count(*) AS value FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) AND commands_count > 0 GROUP BY 1"
+          "rawSql": "SELECT coalesce(actor_type,'unknown') AS metric, count(*) AS value FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) AND commands_count > 0 GROUP BY 1"
         }
       ],
       "fieldConfig": {
@@ -323,7 +323,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT classification AS \"Class\", round(avg(severity)::numeric,1) AS \"Avg severity\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1 ORDER BY 2 DESC"
+          "rawSql": "SELECT classification AS \"Class\", round(avg(severity)::numeric,1) AS \"Avg severity\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) GROUP BY 1 ORDER BY 2 DESC"
         }
       ],
       "fieldConfig": {
@@ -360,7 +360,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT rule_id AS \"Rule\", technique_id AS \"Technique\", confidence AS \"Confidence\", count(*) AS \"Hits\" FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT 20"
+          "rawSql": "SELECT rule_id AS \"Rule\", technique_id AS \"Technique\", confidence AS \"Confidence\", count(*) AS \"Hits\" FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT 20"
         }
       ],
       "fieldConfig": {
@@ -394,7 +394,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT count(*) FILTER (WHERE mapped) AS \"Mapped commands\", count(*) FILTER (WHERE NOT mapped) AS \"Unmapped commands\", round(100.0 * count(*) FILTER (WHERE mapped) / greatest(count(*),1), 1) AS \"Mapped %\" FROM honeylens.commands WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated'))"
+          "rawSql": "SELECT count(*) FILTER (WHERE mapped) AS \"Mapped commands\", count(*) FILTER (WHERE NOT mapped) AS \"Unmapped commands\", round(100.0 * count(*) FILTER (WHERE mapped) / greatest(count(*),1), 1) AS \"Mapped %\" FROM honeylens.commands WHERE $__timeFilter(ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated'))"
         }
       ],
       "fieldConfig": {

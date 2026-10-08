@@ -17,8 +17,10 @@ from pathlib import Path
 
 OUT = Path(__file__).resolve().parents[1] / "grafana" / "dashboards"
 DS = {"type": "grafana-postgresql-datasource", "uid": "honeylens-pg"}
-# The data filter: 'all', 'real' or 'simulated' (fixed values, safe to inline).
-SIM = "('${data}' = 'all' OR {col} = ('${data}' = 'simulated'))"
+# The data filter: 'all', 'real' or 'simulated'. The dropdown has fixed values,
+# but a crafted dashboard URL (?var-data=...) can set any text, so the value is
+# always interpolated with Grafana's :sqlstring format (quoted + escaped).
+SIM = "(${data:sqlstring} = 'all' OR {col} = (${data:sqlstring} = 'simulated'))"
 
 
 def sim(col: str = "is_simulated") -> str:

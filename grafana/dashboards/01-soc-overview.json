@@ -172,7 +172,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT count(*) AS \"Sessions\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated'))"
+          "rawSql": "SELECT count(*) AS \"Sessions\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated'))"
         }
       ],
       "fieldConfig": {
@@ -235,7 +235,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT count(DISTINCT src_ip) AS \"IPs\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated'))"
+          "rawSql": "SELECT count(DISTINCT src_ip) AS \"IPs\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated'))"
         }
       ],
       "fieldConfig": {
@@ -298,7 +298,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT coalesce(sum(login_attempts),0) AS \"Logins\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated'))"
+          "rawSql": "SELECT coalesce(sum(login_attempts),0) AS \"Logins\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated'))"
         }
       ],
       "fieldConfig": {
@@ -361,7 +361,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT count(*) FILTER (WHERE login_success) AS \"Success\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated'))"
+          "rawSql": "SELECT count(*) FILTER (WHERE login_success) AS \"Success\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated'))"
         }
       ],
       "fieldConfig": {
@@ -424,7 +424,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT coalesce(sum(commands_count),0) AS \"Commands\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated'))"
+          "rawSql": "SELECT coalesce(sum(commands_count),0) AS \"Commands\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated'))"
         }
       ],
       "fieldConfig": {
@@ -487,7 +487,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT count(*) FILTER (WHERE severity >= 50) AS \"High+\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated'))"
+          "rawSql": "SELECT count(*) FILTER (WHERE severity >= 50) AS \"High+\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated'))"
         }
       ],
       "fieldConfig": {
@@ -554,7 +554,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT $__timeGroupAlias(start_ts, 1h), classification AS metric, count(*) AS value FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT $__timeGroupAlias(start_ts, 1h), classification AS metric, count(*) AS value FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -712,7 +712,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT classification AS metric, count(*) AS value FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1 ORDER BY 2 DESC"
+          "rawSql": "SELECT classification AS metric, count(*) AS value FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) GROUP BY 1 ORDER BY 2 DESC"
         }
       ],
       "fieldConfig": {
@@ -868,7 +868,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT avg(lat) AS latitude, avg(lon) AS longitude, coalesce(nullif(country,''),'Unknown') AS country, count(*) AS sessions FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) AND lat IS NOT NULL GROUP BY country"
+          "rawSql": "SELECT avg(lat) AS latitude, avg(lon) AS longitude, coalesce(nullif(country,''),'Unknown') AS country, count(*) AS sessions FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) AND lat IS NOT NULL GROUP BY country"
         }
       ],
       "fieldConfig": {
@@ -952,7 +952,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT coalesce(nullif(country,''),'Unknown') AS \"Country\", count(*) AS \"Sessions\", count(DISTINCT src_ip) AS \"IPs\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
+          "rawSql": "SELECT coalesce(nullif(country,''),'Unknown') AS \"Country\", count(*) AS \"Sessions\", count(DISTINCT src_ip) AS \"IPs\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
         }
       ],
       "fieldConfig": {
@@ -986,7 +986,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT CASE WHEN asn IS NULL THEN '' ELSE 'AS' || asn END AS \"ASN\", coalesce(nullif(as_org,''),'Unknown') AS \"Organisation\", count(*) AS \"Sessions\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 10"
+          "rawSql": "SELECT CASE WHEN asn IS NULL THEN '' ELSE 'AS' || asn END AS \"ASN\", coalesce(nullif(as_org,''),'Unknown') AS \"Organisation\", count(*) AS \"Sessions\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 10"
         }
       ],
       "fieldConfig": {
@@ -1020,7 +1020,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT host(src_ip) AS \"IP\", max(country) AS \"Country\", count(*) AS \"Sessions\", max(severity) AS \"Max severity\", bool_or(is_simulated) AS \"Simulated\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY src_ip ORDER BY 3 DESC LIMIT 15"
+          "rawSql": "SELECT host(src_ip) AS \"IP\", max(country) AS \"Country\", count(*) AS \"Sessions\", max(severity) AS \"Max severity\", bool_or(is_simulated) AS \"Simulated\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) GROUP BY src_ip ORDER BY 3 DESC LIMIT 15"
         }
       ],
       "fieldConfig": {
@@ -1093,7 +1093,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT severity_label AS \"Severity\", count(*) AS \"Sessions\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1 ORDER BY min(severity)"
+          "rawSql": "SELECT severity_label AS \"Severity\", count(*) AS \"Sessions\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) GROUP BY 1 ORDER BY min(severity)"
         }
       ],
       "fieldConfig": {

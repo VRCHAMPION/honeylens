@@ -12,7 +12,8 @@ TABLES = {"raw_events", "sessions", "login_attempts", "commands", "downloads", "
 
 
 def test_first_run_applied_everything(migrated):
-    assert migrated["applied"] == ["001_schema.sql", "002_views_retention.sql", "003_grants.sql", "004_pipeline_ignored.sql"]
+    assert migrated["applied"] == ["001_schema.sql", "002_views_retention.sql", "003_grants.sql", "004_pipeline_ignored.sql",
+                                  "005_default_privileges.sql"]
     with psycopg.connect(migrated["admin"]) as c:
         names = {r[0] for r in c.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='honeylens'")}
     assert names >= TABLES
@@ -96,3 +97,21 @@ def test_retention_deletes_old_rows_only(clean_db):
         assert out["raw_events"] == 1
         assert c.execute("SELECT event_uid FROM honeylens.raw_events").fetchall() == [("u5",)]
         assert c.execute("SELECT count(*) FROM honeylens.apply_retention(0)").fetchone()[0] == 0
+
+
+def test_future_tables_get_least_privilege_grants(migrated):
+    # A table created by the migration role AFTER 003_grants.sql must still get
+    # read/write for the pipeline and read-only for Grafana/report (005).
+    with psycopg.connect(migrated["admin"], autocommit=True) as c:
+        c.execute("CREATE TABLE IF NOT EXISTS honeylens.future_tbl (id serial PRIMARY KEY, x int)")
+    try:
+        with psycopg.connect(role_dsn(migrated, "hl_pipeline")) as c:
+            c.execute("INSERT INTO honeylens.future_tbl (x) VALUES (1)")
+        for role in ("hl_grafana", "hl_report"):
+            with psycopg.connect(role_dsn(migrated, role)) as c:
+                assert c.execute("SELECT count(*) FROM honeylens.future_tbl").fetchone()[0] >= 1
+            with psycopg.connect(role_dsn(migrated, role)) as c, pytest.raises(psycopg.Error):
+                c.execute("INSERT INTO honeylens.future_tbl (x) VALUES (2)")
+    finally:
+        with psycopg.connect(migrated["admin"], autocommit=True) as c:
+            c.execute("DROP TABLE IF EXISTS honeylens.future_tbl")

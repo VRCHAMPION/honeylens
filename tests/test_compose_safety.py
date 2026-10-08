@@ -29,6 +29,14 @@ def test_static_checker_flags_bad_configs(tmp_path):
     problems = "\n".join(cp.check_static(bad, [str(f)], cp.ALLOWED, True))
     for needle in ("127.0.0.1", "postgres", "host", "privileged", "socket"):
         assert needle in problems
+    internal_only = {"networks": {"edge": {"internal": True}},
+                     "services": {"grafana": svc([{"host_ip": "127.0.0.1", "target": 3000, "published": "3000"}],
+                                                 networks={"edge": None})}}
+    assert any("internal networks" in p for p in cp.check_static(internal_only, [str(f)], cp.ALLOWED, True))
+    ok_nets = {"networks": {"edge": {"internal": True}, "ui": {}},
+               "services": {"grafana": svc([{"host_ip": "127.0.0.1", "target": 3000, "published": "3000"}],
+                                           networks={"edge": None, "ui": None})}}
+    assert cp.check_static(ok_nets, [str(f)], cp.ALLOWED, True) == []
     f.write_text("version: '3'\nservices: {}\n")
     assert any("version" in p for p in cp.check_static({"services": {}}, [str(f)], cp.ALLOWED, True))
 
@@ -56,12 +64,84 @@ def test_repo_hygiene():
             assert b"\r\n" not in f.read_bytes(), f"CRLF in {f}"
 
 
-def test_only_pipeline_has_external_network_access():
-    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
+class _ComposeLoader(yaml.SafeLoader):
+    """safe_load plus Compose's custom tags (!override, !reset) kept as plain values."""
+
+
+def _any_tag(loader, _suffix, node):
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node)
+    return loader.construct_scalar(node)
+
+
+_ComposeLoader.add_multi_constructor("!", _any_tag)
+
+
+def load_compose(name):
+    return yaml.load((ROOT / name).read_text(), Loader=_ComposeLoader)  # noqa: S506  # nosec B506 - SafeLoader subclass
+
+
+def _nets(service):
+    nets = service.get("networks", [])
+    return list(nets) if isinstance(nets, (list, dict)) else []
+
+
+def _no_nat(net):
+    return (net or {}).get("driver_opts", {}).get("com.docker.network.bridge.enable_ip_masquerade") == "false"
+
+
+def test_no_service_has_internet_by_default():
+    compose = load_compose("docker-compose.yml")
     networks = compose["networks"]
-    services = compose["services"]
     assert networks["backend"]["internal"] is True
-    assert networks["edge"]["internal"] is True
-    assert networks["egress"].get("internal", False) is False
-    assert set(services["pipeline"]["networks"]) == {"backend", "egress"}
-    assert all("egress" not in service.get("networks", []) for name, service in services.items() if name != "pipeline")
+    assert "egress" not in networks
+    for name, net in networks.items():
+        # every network is either internal or has outbound NAT switched off
+        assert (net or {}).get("internal") is True or _no_nat(net), name
+    for name, service in compose["services"].items():
+        assert "egress" not in _nets(service), name
+
+
+def test_published_services_are_on_a_non_internal_network():
+    # Docker silently skips port publishing for a container attached only to
+    # internal networks, so 127.0.0.1:2222 / :3000 would never bind.
+    base = load_compose("docker-compose.yml")
+    cloud = load_compose("docker-compose.cloud.yml")
+    for compose_networks, services in (
+        (base["networks"], base["services"]),
+        ({**base["networks"], **cloud["networks"]},
+         {k: {**v, **cloud["services"].get(k, {})} for k, v in base["services"].items()}),
+    ):
+        for name, service in services.items():
+            if not service.get("ports"):
+                continue
+            usable = [n for n in _nets(service) if not (compose_networks.get(n) or {}).get("internal")]
+            assert usable, f"{name} publishes ports but is only on internal networks"
+    assert set(_nets(base["services"]["grafana"])) == {"backend", "ui"}
+    assert _nets(base["services"]["cowrie"]) == ["edge"]
+    assert "backend" not in _nets(base["services"]["cowrie"])  # attacker-facing service never reaches the DB
+    assert _no_nat(cloud["networks"]["cowrie_net"])
+
+
+def test_pipeline_egress_is_opt_in_override():
+    base = load_compose("docker-compose.yml")
+    enrich = load_compose("docker-compose.enrich.yml")
+    assert _nets(base["services"]["pipeline"]) == ["backend"]
+    assert set(enrich["services"]) == {"pipeline"}
+    assert set(_nets(enrich["services"]["pipeline"])) == {"backend", "egress"}
+    assert (enrich["networks"]["egress"] or {}).get("internal", False) is False
+
+
+def test_live_check_requires_published_ports(monkeypatch):
+    class R:
+        stdout = "honeylens-cowrie-1\t\nhoneylens-grafana-1\t127.0.0.1:3000->3000/tcp\n"
+    monkeypatch.setattr(cp.subprocess, "run", lambda *a, **k: R())
+    problems = cp.check_live()
+    assert any("cowrie" in p and "not published" in p for p in problems)
+    assert not any("grafana" in p for p in problems)
+    R.stdout = "honeylens-cowrie-1\t127.0.0.1:2222->2222/tcp\nhoneylens-grafana-1\t127.0.0.1:3000->3000/tcp\n"
+    assert cp.check_live() == []
+    R.stdout = "honeylens-cowrie-1\t0.0.0.0:22->2222/tcp\nhoneylens-grafana-1\t127.0.0.1:3000->3000/tcp\n"
+    assert cp.check_live() != [] and cp.check_live(cloud=True) == []

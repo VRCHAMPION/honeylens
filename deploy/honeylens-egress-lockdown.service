@@ -1,0 +1,33 @@
+# systemd unit: re-apply the HoneyLens Cowrie egress lockdown on every boot.
+#
+# iptables rules live in memory and are gone after a reboot. Docker restarts
+# the Compose containers itself (restart: unless-stopped) as soon as
+# docker.service starts, so this unit runs BEFORE docker.service: the rules are
+# in place before Cowrie is reachable again. (cowrie_net also has IP
+# masquerading off, so Cowrie has no outbound NAT even in that window.)
+#
+# Install (from the repo folder on the VM):
+#   sudo install -m 0755 deploy/egress-lockdown.sh /usr/local/sbin/honeylens-egress-lockdown
+#   sudo install -m 0644 deploy/honeylens-egress-lockdown.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now honeylens-egress-lockdown.service
+#   systemctl status honeylens-egress-lockdown.service      # active (exited)
+#
+# If something flushes the firewall at runtime (e.g. a firewalld reload), run
+#   sudo systemctl restart honeylens-egress-lockdown.service
+# then: sudo sh deploy/verify-egress.sh  (must print PASS)
+
+[Unit]
+Description=HoneyLens: block outbound connections from the Cowrie container network
+Documentation=https://github.com/VRCHAMPION/honeylens/blob/main/DEPLOY_CLOUD.md
+After=network-pre.target
+Wants=network-pre.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh /usr/local/sbin/honeylens-egress-lockdown
+
+[Install]
+WantedBy=multi-user.target docker.service

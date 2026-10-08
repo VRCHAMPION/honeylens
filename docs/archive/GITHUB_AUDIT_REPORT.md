@@ -236,7 +236,7 @@ Fixed documentation/configuration truth gaps:
 - Deployment helper docs no longer claim ShellCheck or Docker tests were rerun in this environment.
 - The weekly report methodology includes conditional DB-IP Lite attribution.
 - Grafana datasource no longer claims PostgreSQL 17 metadata against PostgreSQL 18.
-- Added [PROJECT_DEEP_DIVE.md](PROJECT_DEEP_DIVE.md), covering data flow, components, tables,
+- Added [PROJECT_DEEP_DIVE.md](../PROJECT_DEEP_DIVE.md), covering data flow, components, tables,
   dashboards, technologies, threat controls, limitations, tests, performance, use cases, and
   interview summaries.
 
@@ -263,7 +263,7 @@ dashboards, and weekly exports. It separates the service that accepts connection
 pipeline that writes data and from Grafana/report roles that only read. It is designed to study
 interaction with an emulated shell, not to run real malware or attribute activity to people.
 
-The full beginner-to-advanced walkthrough is in [PROJECT_DEEP_DIVE.md](PROJECT_DEEP_DIVE.md).
+The full beginner-to-advanced walkthrough is in [PROJECT_DEEP_DIVE.md](../PROJECT_DEEP_DIVE.md).
 
 ## Technology stack
 

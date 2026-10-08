@@ -1,0 +1,4 @@
+# Gitleaks findings reviewed and accepted (format: <commit>:<file>:<rule>:<line>).
+# A random-looking throwaway password used only as a unit-test fixture; the test
+# now generates its value at runtime, but the commit stays in branch history.
+8e0f68577fdf24d86c11c684cdd0b3cc5f4fd63d:tests/test_scheduler.py:generic-api-key:124

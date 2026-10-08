@@ -222,14 +222,25 @@ docker compose version                               # must be v2.x
 cd honeylens
 python3 scripts/make_env.py
 python3 scripts/check_ports.py -f docker-compose.yml -f docker-compose.cloud.yml --cloud   # must PASS
-sudo sh deploy/egress-lockdown.sh
-sudo netfilter-persistent save
+# install the lockdown as a boot-time service (runs before docker.service, survives reboots)
+sudo install -m 0755 deploy/egress-lockdown.sh /usr/local/sbin/honeylens-egress-lockdown
+sudo install -m 0644 deploy/honeylens-egress-lockdown.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now honeylens-egress-lockdown.service
 docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d --build
 docker compose ps        # all healthy; cowrie shows 0.0.0.0:22->2222/tcp
+docker compose port grafana 3000      # must print 127.0.0.1:3000 (needed for the step 11 tunnel)
 ```
 
-This ordering installs the host firewall rules before Cowrie is exposed on port 22. The Docker
-daemon must already be running so its `DOCKER-USER` chain exists. Optional GeoIP for real attackers:
+This ordering installs the host firewall rules before Cowrie is exposed on port 22. iptables rules
+are lost on reboot, and Docker restarts the containers by itself as soon as `docker.service` starts,
+so the systemd unit re-applies the rules on every boot **before** Docker starts
+(`deploy/honeylens-egress-lockdown.service`). The script is idempotent and also adds the same rules
+with `ip6tables` when available. `netfilter-persistent save` is not needed for these rules (saving
+Docker's own rules with it can conflict with Docker's rule management). As a second layer,
+`cowrie_net` has IP masquerading off, so Cowrie has no outbound NAT even if the rules are missing.
+If something flushes the firewall at runtime (for example a firewalld reload), run
+`sudo systemctl restart honeylens-egress-lockdown.service` and re-run the step 10 check. Optional GeoIP for real attackers:
 `sh scripts/download_geoip.sh && docker compose restart pipeline`.
 
 ### 10. Verify the egress lockdown
@@ -240,7 +251,7 @@ sudo sh deploy/verify-egress.sh      # must print PASS
 
 `verify-egress.sh` sends **no traffic to the Internet or to any third-party service**. It starts two
 throwaway listeners that you control on the VM (one in a temporary network namespace addressed from
-the RFC 2544 test range 198.18.0.0/15, which the host routes and NATs exactly like Internet traffic,
+the RFC 2544 test range 198.18.0.0/15, which the host forwards exactly like Internet traffic,
 and one on the Cowrie bridge gateway), tries to connect to them from inside Cowrie, and passes only
 if both attempts fail **and** the packet counters of the HoneyLens DROP rules went up - proving our
 rule did the blocking. The rules: `DOCKER-USER` drops every NEW
@@ -257,7 +268,9 @@ On YOUR laptop:
 ssh -p 22022 -N -L 3000:127.0.0.1:3000 ubuntu@<ADMIN_HOST>     # over Tailscale / bastion
 ```
 
-Then open <http://127.0.0.1:3000>. Port 3000 is never open in the cloud firewall.
+Then open <http://127.0.0.1:3000>. Port 3000 is never open in the cloud firewall. The tunnel
+works because Grafana is published on the VM's `127.0.0.1:3000`; check with
+`docker compose port grafana 3000` on the VM if the page does not load.
 
 ### 12. Backups
 

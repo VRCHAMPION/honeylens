@@ -1,0 +1,19 @@
+# HoneyLens - OPT-IN outbound access for the pipeline (IPInfo enrichment).
+#
+# By default NO HoneyLens container has internet access. Use this override only
+# if you set HL_ENRICH_API_TOKEN in .env and want the pipeline to look up IPs
+# that the offline GeoIP files do not cover:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.enrich.yml up -d
+#   # cloud: add it after docker-compose.cloud.yml
+#
+# Only the pipeline joins the "egress" network. It is the process that parses
+# attacker-controlled data, so keep this off unless you need the API; requests
+# are rate-limited (HL_ENRICH_API_MAX_PER_MINUTE) and cached in PostgreSQL.
+
+services:
+  pipeline:
+    networks: [backend, egress]
+
+networks:
+  egress: {}

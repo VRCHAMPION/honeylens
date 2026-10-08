@@ -9,6 +9,13 @@
 #       127.0.0.1:3000 -> Grafana dashboards
 #   * PostgreSQL has NO published port; it lives on an internal network.
 #   * no host networking, no privileged containers, no Docker socket mounts.
+#
+# NETWORKS: Docker does not publish ports for a container that is attached
+# ONLY to "internal: true" networks, so Cowrie and Grafana sit on ordinary
+# bridges with IP masquerading (outbound NAT) switched off: published
+# loopback ports work, but the containers get no working route to the
+# internet. Nothing has outbound internet by default; the pipeline gets it
+# only with the opt-in docker-compose.enrich.yml override (IPInfo API).
 
 name: honeylens
 
@@ -139,8 +146,9 @@ services:
       - cowrie_var:/cowrie-var:ro     # read-only: the pipeline can never alter evidence
       - hl_synthetic:/synthetic:ro
       - ./geoip:/geoip:ro             # optional GeoIP files (git-ignored)
-    # The only service allowed outbound access, for opt-in IPInfo enrichment.
-    networks: [backend, egress]
+    # No internet by default. For opt-in IPInfo enrichment add the override:
+    #   docker compose -f docker-compose.yml -f docker-compose.enrich.yml up -d
+    networks: [backend]
     depends_on:
       migrate: { condition: service_completed_successfully }
     healthcheck:
@@ -183,7 +191,8 @@ services:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-    networks: [backend, edge]
+    # backend: read-only DB access. ui: only so 127.0.0.1:3000 can be published.
+    networks: [backend, ui]
     depends_on:
       migrate: { condition: service_completed_successfully }
     healthcheck:
@@ -303,9 +312,18 @@ networks:
     # Internal database network; no route to the internet.
     internal: true
   edge:
-    # Keep the Cowrie/simulator/Grafana side local to the project.
-    internal: true
-  egress: {}
+    # Cowrie + simulator. Not "internal" (that would silently drop the
+    # 127.0.0.1:2222 port), but with masquerading off there is no outbound NAT,
+    # so Cowrie has no working route out. Cowrie's own out_addr=127.0.0.1 and
+    # disabled forwarding are a second layer.
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+  ui:
+    # Grafana only, so 127.0.0.1:3000 can be published. No outbound NAT either.
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
 
 volumes:
   pg_data:

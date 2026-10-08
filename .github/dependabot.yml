@@ -1,0 +1,28 @@
+# Dependabot: weekly update PRs for every pinned dependency.
+# Actions are pinned by commit SHA and images by tag/digest, so without this
+# nothing would ever tell us about a security fix upstream.
+version: 2
+updates:
+  - package-ecosystem: pip            # pyproject.toml (exact pins)
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-tools:
+        patterns: ["pytest*", "ruff", "bandit", "pip-audit", "pre-commit", "stix2", "setuptools"]
+
+  - package-ecosystem: github-actions # .github/workflows/*.yml (SHA pins + version comments)
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker         # Dockerfile base image
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker-compose # postgres / cowrie / grafana image tags
+    directory: /
+    schedule:
+      interval: weekly

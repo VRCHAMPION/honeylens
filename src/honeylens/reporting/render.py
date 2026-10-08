@@ -17,7 +17,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from honeylens import __version__
 from honeylens.config import DISPLAY_TZ
 from honeylens.mitre.attack import default_rules, load_snapshot
-from honeylens.pipeline.sanitize import defang, mask_ip
+from honeylens.pipeline.sanitize import defang, mask_ip, mask_ips_in_text
 from honeylens.reporting import exports
 from honeylens.reporting.data import ReportData
 
@@ -130,13 +130,21 @@ def render_html(d: ReportData, mask_ips: bool = False, days: int = 7) -> str:
             return ""
         return mask_ip(value) if mask_ips else defang(value)
 
+    def show_text(value: str | None) -> str:
+        # Commands and URLs: with --mask-ips, IPs inside the text are masked too.
+        if not value:
+            return ""
+        return defang(mask_ips_in_text(value) if mask_ips else value)
+
     def show_summary(value: str | None) -> str:
         if not value:
             return ""
         if not mask_ips:
             return value
         ip_part, _, rest = value.partition(" ")
-        return "[masked IP] " + rest if "[.]" in ip_part or ":" in ip_part else value
+        if "[.]" in ip_part or ":" in ip_part:
+            value = "[masked IP] " + rest
+        return mask_ips_in_text(value)
 
     tpl = env.get_template("weekly.html")
     return tpl.render(
@@ -150,7 +158,7 @@ def render_html(d: ReportData, mask_ips: bool = False, days: int = 7) -> str:
         generated=ist(datetime.now(UTC)),
         ist=ist,
         ip=show_ip,
-        defang=defang,
+        defang=show_text,
         summary=show_summary,
         daily_svg=daily_svg(d.daily),
         summary_text=summary_text(d),

@@ -10,8 +10,11 @@ ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /src
 COPY pyproject.toml README.md ./
 COPY src ./src
+# pip is only needed to install; remove it from the venv so the runtime image
+# does not ship (or get flagged for) an installer it never uses.
 RUN python -m venv /opt/venv \
- && /opt/venv/bin/pip install --no-cache-dir .
+ && /opt/venv/bin/pip install --no-cache-dir . \
+ && /opt/venv/bin/python -m pip uninstall -y pip
 
 FROM python:3.12.13-slim-trixie
 LABEL org.opencontainers.image.title="honeylens" \
@@ -23,10 +26,12 @@ ENV PATH=/opt/venv/bin:$PATH \
     HL_MIGRATIONS_DIR=/app/db/migrations
 # Apply Debian security updates available today (Trivy found fixable HIGH/CRITICAL
 # CVEs in the base image), then remove the package lists to keep the image small.
+# The base image's own pip is not needed at runtime either, so it goes too.
 # hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get -y upgrade --no-install-recommends \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && python -m pip uninstall -y pip
 # Non-root user with a fixed UID so volume permissions are predictable.
 RUN groupadd --system --gid 10001 honeylens \
  && useradd --system --uid 10001 --gid honeylens --home-dir /app --shell /usr/sbin/nologin honeylens

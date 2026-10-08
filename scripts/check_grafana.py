@@ -85,7 +85,8 @@ def main() -> int:
         panels = dash.get("dashboard", {}).get("panels", [])
         for p in panels:
             for t in p.get("targets", []):
-                sql = t["rawSql"].replace("${data}", args.data).replace("${session:sqlstring}", "'" + session.replace("'", "''") + "'")
+                sql = (t["rawSql"].replace("${data:sqlstring}", "'" + args.data.replace("'", "''") + "'")
+                       .replace("${session:sqlstring}", "'" + session.replace("'", "''") + "'"))
                 code, res = g.call("/api/ds/query", {"from": args.range, "to": "now", "queries": [
                     {"refId": t["refId"], "datasource": {"uid": "honeylens-pg"}, "rawSql": sql,
                      "format": t.get("format", "table"), "rawQuery": True}]})
