@@ -79,6 +79,7 @@ def test_provider_respects_limit_and_recovers():
     assert sum(r is not None for r in results) == 5
     assert len(calls) == 5 and api.stats["rate_limited"] == 7
     assert results[0].country_code == "DE" and results[0].asn == 3320
+    assert results[0].country == "Germany"  # full name, same as the MMDB providers
     clock.t += 61
     assert api.lookup("1.1.1.1") is not None and len(calls) == 6
 
@@ -135,3 +136,13 @@ def test_enricher_continues_when_api_fails():
     info = e.lookup("8.8.8.8")
     assert info.source == "none" and info.ip == "8.8.8.8"
     assert e.stats["miss"] == 1
+
+
+def test_ipinfo_country_is_full_name_like_mmdb():
+    parse = IPInfoProvider._parse
+    assert parse("8.8.8.8", {"country": "US"}).country == "United States"
+    assert parse("8.8.8.8", {"country": "nl"}).country_code == "NL"
+    assert parse("8.8.8.8", {"country": "NL"}).country == "Netherlands"
+    assert parse("8.8.8.8", {"country": "US", "country_name": "United States of America"}).country == "United States of America"
+    assert parse("8.8.8.8", {"country": "ZZ"}).country == "ZZ"  # unknown code kept, never invented
+    assert parse("8.8.8.8", {}).country == ""
