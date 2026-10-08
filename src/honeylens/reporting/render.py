@@ -20,6 +20,7 @@ from honeylens.mitre.attack import default_rules, load_snapshot
 from honeylens.pipeline.sanitize import defang, mask_ip, mask_ips_in_text
 from honeylens.reporting import exports
 from honeylens.reporting.data import ReportData
+from honeylens.versions import COWRIE_VERSION
 
 KPIS = [
     ("sessions", "Sessions"),
@@ -78,12 +79,12 @@ def daily_svg(rows: list[dict[str, Any]]) -> str:
     return "".join(parts)
 
 
-def takeaways(d: ReportData) -> list[str]:
+def takeaways(d: ReportData, mask_ips: bool = False) -> list[str]:
     """Plain-English defender advice driven by what was actually seen."""
     out: list[str] = []
     techs = {t["technique_id"] for t in d.techniques}
     if d.totals.get("login_attempts"):
-        top_users = ", ".join(u["username"] for u in d.usernames[:3])
+        top_users = ", ".join(mask_ips_in_text(u["username"]) if mask_ips else u["username"] for u in d.usernames[:3])
         out.append(f"Password guessing is constant ({d.totals['login_attempts']} attempts; top usernames: {top_users}). "
                    "Disable SSH password login and use keys (PasswordAuthentication no), or at least fail2ban.")
     if "T1098.004" in techs:
@@ -136,6 +137,13 @@ def render_html(d: ReportData, mask_ips: bool = False, days: int = 7) -> str:
             return ""
         return defang(mask_ips_in_text(value) if mask_ips else value)
 
+    def show_cred(value: str | None) -> str:
+        # Usernames/passwords stay visible (they are the attackers' guesses, the
+        # point of the table) but with --mask-ips any IP typed into them is masked.
+        if not value:
+            return value or ""
+        return mask_ips_in_text(value) if mask_ips else value
+
     def show_summary(value: str | None) -> str:
         if not value:
             return ""
@@ -160,12 +168,13 @@ def render_html(d: ReportData, mask_ips: bool = False, days: int = 7) -> str:
         ip=show_ip,
         defang=show_text,
         summary=show_summary,
+        cred=show_cred,
         daily_svg=daily_svg(d.daily),
         summary_text=summary_text(d),
-        takeaways=takeaways(d),
+        takeaways=takeaways(d, mask_ips),
         attack_version=load_snapshot()["attack_version"],
         rule_count=len(default_rules()),
-        cowrie_version="3.1.1",
+        cowrie_version=COWRIE_VERSION,
         version=__version__,
     )
 
