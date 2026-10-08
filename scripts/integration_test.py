@@ -6,7 +6,8 @@
 
 Steps (each prints PASS/FAIL and timings):
  1. docker compose down -v, then up -d --build, wait until healthy
- 2. loopback port check on the running containers
+ 2. loopback port check on the running containers; the HOST reaches
+    127.0.0.1:3000 (Grafana /api/health) and 127.0.0.1:2222 (Cowrie SSH banner)
  3. live simulator -> Cowrie (real SSH inside the Compose network) + synthetic data
  4. pipeline ingests everything; DB count == independently computed expected count
  5. PostgreSQL outage: stop postgres, generate traffic, start postgres -> pipeline catches up, no loss/dupes
@@ -107,6 +108,27 @@ def as_cowrie(py: str) -> None:
        "honeylens:1.0.0", "python", "-c", py)
 
 
+def host_ports_reachable(timeout: float = 60) -> tuple[bool, str]:
+    """Reach the published ports FROM THE HOST, the way a user does (not via Docker networks)."""
+    import socket
+    import urllib.request
+
+    deadline = time.time() + timeout
+    detail = ""
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:3000/api/health", timeout=5) as r:  # noqa: S310  # nosec B310
+                health = json.loads(r.read().decode())
+            with socket.create_connection(("127.0.0.1", 2222), timeout=5) as sock:
+                banner = sock.recv(64).decode(errors="replace").strip()
+            ok = health.get("database") == "ok" and banner.startswith("SSH-2.0")
+            return ok, f"(grafana database={health.get('database')}; cowrie banner={banner[:40]!r})"
+        except (OSError, ValueError) as e:
+            detail = f"({type(e).__name__}: {e})"
+            time.sleep(3)
+    return False, detail
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--keep", action="store_true")
@@ -121,6 +143,7 @@ def main() -> int:
 
     out = sh(sys.executable, "scripts/check_ports.py", "--live", check=False)
     record("2 loopback-only published ports (live)", "PASS" in out and "FAIL" not in out)
+    record("2b host can reach 127.0.0.1:3000 (Grafana) and 127.0.0.1:2222 (Cowrie)", *host_ports_reachable())
 
     t = time.time()
     live = dc("--profile", "sim", "run", "--rm", "simulator", "honeylens-simulator", "live", "--target", "cowrie",
