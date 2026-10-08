@@ -1,0 +1,497 @@
+{
+  "uid": "hl-session-explorer",
+  "title": "HoneyLens \u00b7 4. Session Explorer",
+  "description": "Drill into individual sessions: score reasons, commands, techniques.",
+  "tags": [
+    "honeylens"
+  ],
+  "timezone": "Asia/Kolkata",
+  "editable": false,
+  "graphTooltip": 1,
+  "schemaVersion": 41,
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      {
+        "name": "data",
+        "label": "Data",
+        "type": "custom",
+        "query": "all,real,simulated",
+        "current": {
+          "text": "all",
+          "value": "all"
+        },
+        "options": [
+          {
+            "text": "all",
+            "value": "all",
+            "selected": true
+          },
+          {
+            "text": "real",
+            "value": "real",
+            "selected": false
+          },
+          {
+            "text": "simulated",
+            "value": "simulated",
+            "selected": false
+          }
+        ],
+        "description": "all = everything; real = internet attackers only; simulated = HoneyLens simulator only"
+      },
+      {
+        "name": "session",
+        "label": "Session",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "honeylens-pg"
+        },
+        "query": "SELECT session_id FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) ORDER BY severity DESC NULLS LAST, start_ts DESC LIMIT 300",
+        "refresh": 2,
+        "includeAll": false,
+        "sort": 0,
+        "description": "Pick a session (highest severity first)."
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "",
+      "description": "Computed from the sessions in the time range (ignores the Data filter). SIMULATED = made by the HoneyLens simulator; REAL = internet attackers.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 2
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT CASE WHEN count(*) = 0 THEN 'NO DATA' WHEN bool_and(is_simulated) THEN 'SIMULATED' WHEN NOT bool_or(is_simulated) THEN 'REAL' ELSE 'MIXED \u00b7 ' || round(100.0 * count(*) FILTER (WHERE is_simulated) / count(*)) || '% SIM' END AS \"DATA MODE\" FROM honeylens.sessions WHERE $__timeFilter(start_ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "SIMULATED": {
+                  "color": "#b45309",
+                  "index": 0
+                },
+                "REAL": {
+                  "color": "#15803d",
+                  "index": 1
+                },
+                "NO DATA": {
+                  "color": "#475569",
+                  "index": 2
+                }
+              }
+            },
+            {
+              "type": "regex",
+              "options": {
+                "pattern": "^MIXED.*",
+                "result": {
+                  "color": "#a16207",
+                  "index": 3
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        },
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 16
+        }
+      },
+      "transparent": false
+    },
+    {
+      "id": 2,
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 18,
+        "h": 2
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "<div style='font-family:monospace;font-size:12px;line-height:1.5;color:#c7ccd6;border-left:3px solid #b45309;padding:2px 8px'>Simulated = RFC 5737 documentation IPs, private Docker addresses or the synthetic generator (never real attackers). Filter with <b>Data</b> = all / real / simulated. Times in IST (Asia/Kolkata); stored in UTC.</div>"
+      }
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Sessions (highest severity first)",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 2,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT start_ts AS \"Start (IST)\", session_id AS \"Session\", host(src_ip) AS \"IP\", country AS \"Country\", classification AS \"Class\", severity AS \"Severity\", actor_type AS \"Actor\", login_attempts AS \"Logins\", commands_count AS \"Cmds\", is_simulated AS \"Sim\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) ORDER BY severity DESC NULLS LAST, start_ts DESC LIMIT 200"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#3f6f4f",
+                      "value": null
+                    },
+                    {
+                      "color": "#8a7a2a",
+                      "value": 25
+                    },
+                    {
+                      "color": "#a8571c",
+                      "value": 50
+                    },
+                    {
+                      "color": "#a32626",
+                      "value": 75
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Selected session severity",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 4,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT severity AS \"Severity\" FROM honeylens.v_session_overview WHERE session_id = ${session:sqlstring}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3f6f4f",
+                "value": null
+              },
+              {
+                "color": "#8a7a2a",
+                "value": 25
+              },
+              {
+                "color": "#a8571c",
+                "value": 50
+              },
+              {
+                "color": "#a32626",
+                "value": 75
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Summary",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 12,
+        "w": 20,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT summary AS \"Summary\", classification AS \"Class\", actor_type AS \"Actor\", median_cmd_gap_s AS \"Median gap (s)\" FROM honeylens.v_session_overview WHERE session_id = ${session:sqlstring}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto",
+              "wrapText": true
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "lg"
+      }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Why this score (transparent points)",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 10,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT r->>'rule' AS \"Rule\", (r->>'points')::int AS \"Points\", r->>'detail' AS \"Detail\" FROM honeylens.sessions, jsonb_array_elements(score_reasons) r WHERE session_id = ${session:sqlstring}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Commands in this session",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 18,
+        "w": 14,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT ts AS \"Time (IST)\", command AS \"Command\", mapped AS \"Mapped\" FROM honeylens.commands WHERE session_id = ${session:sqlstring} ORDER BY ts"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "ATT&CK matches in this session",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT ts AS \"Time (IST)\", technique_id AS \"Technique\", technique_name AS \"Name\", tactic AS \"Tactic\", rule_id AS \"Rule\" FROM honeylens.attack_matches WHERE session_id = ${session:sqlstring} ORDER BY ts"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Logins in this session",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 27,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT ts AS \"Time (IST)\", username AS \"Username\", password AS \"Password\", success AS \"OK\" FROM honeylens.login_attempts WHERE session_id = ${session:sqlstring} ORDER BY ts"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    }
+  ],
+  "version": 1,
+  "links": [
+    {
+      "title": "HoneyLens dashboards",
+      "type": "dashboards",
+      "tags": [
+        "honeylens"
+      ],
+      "asDropdown": true
+    }
+  ]
+}

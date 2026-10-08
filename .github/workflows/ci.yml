@@ -1,0 +1,131 @@
+# Continuous Integration (CI): runs on every push / pull request on GitHub.
+#
+# Supply-chain choices:
+#   * GitHub actions are pinned to full commit SHAs (a tag can be moved).
+#   * Scanners run from their official container images pinned by digest,
+#     instead of third-party wrapper actions.
+#   * The workflow token is read-only.
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+
+env:
+  TRIVY_IMAGE: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+  HADOLINT_IMAGE: hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
+  # v8.30.1 has an upstream report of silently missing secret matches; use the
+  # last release before that regression and pin its published GHCR manifest.
+  GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.0@sha256:691af3c7c5a48b16f187ce3446d5f194838f91238f27270ed36eef6359a574d9
+
+jobs:
+  lint:
+    name: lint + static security checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - name: ruff (lint)
+        run: ruff check .
+      - name: bandit (Python security lint)
+        run: bandit -q -c pyproject.toml -r src scripts
+      - name: pip-audit (known-vulnerable dependencies)
+        run: pip-audit --skip-editable
+      - name: ShellCheck (all shell scripts)
+        run: shellcheck --version && shellcheck --severity=style scripts/*.sh deploy/*.sh
+      - name: hadolint (Dockerfile lint)
+        run: docker run --rm -i "$HADOLINT_IMAGE" < Dockerfile
+
+  test:
+    name: pytest + coverage
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18.6-trixie
+        env:
+          POSTGRES_USER: hl_admin
+          POSTGRES_PASSWORD: ci-only-throwaway-db # throwaway CI database, not a real secret  # gitleaks:allow
+        ports: ["127.0.0.1:5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hl_admin" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      HL_TEST_PG: "host=127.0.0.1 port=5432 user=hl_admin password=ci-only-throwaway-db" # gitleaks:allow
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - name: pytest with coverage (includes DB migration + stix2 validation tests)
+        run: pytest --cov=honeylens --cov-report=term --cov-fail-under=80
+      - name: STIX 2.1 sample validated with the stix2 library
+        run: python scripts/validate_stix.py docs/samples/iocs.stix.json
+      - name: ATT&CK Navigator layer format
+        run: python scripts/validate_navigator.py docs/samples/attack-navigator-layer.json docs/samples/attack-navigator-coverage-layer.json
+
+  compose:
+    name: compose safety, image scan, integration test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: create .env with random secrets (never committed)
+        run: python3 scripts/make_env.py
+      - name: Docker Compose config validation (laptop + cloud)
+        run: docker compose config -q && docker compose -f docker-compose.yml -f docker-compose.cloud.yml config -q
+      - name: loopback-only port exposure check
+        run: python3 scripts/check_ports.py && python3 scripts/check_ports.py -f docker-compose.yml -f docker-compose.cloud.yml --cloud
+      - name: build image
+        run: docker compose build
+      - name: pull pinned upstream images
+        run: docker compose pull postgres cowrie grafana
+      - name: Trivy - report every HIGH/CRITICAL (does not fail the build)
+        run: |
+          for img in honeylens:1.0.0 cowrie/cowrie:3.1.1 postgres:18.6-trixie grafana/grafana:12.4.12; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
+              image --scanners vuln --severity HIGH,CRITICAL --format table "$img"
+          done
+      - name: Trivy - FAIL on a CRITICAL that already has a fix in OUR image
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
+            image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 honeylens:1.0.0
+      - name: full integration test (clean volumes, real Cowrie + PostgreSQL + Grafana)
+        run: python3 scripts/integration_test.py
+      - name: no generated secret value in evidence, logs or the release ZIP
+        run: |
+          python3 scripts/check_secrets_exposure.py . --allow-local-env --env .env
+          sh scripts/package.sh /tmp && python3 scripts/check_secrets_exposure.py /tmp/honeylens-project.zip --env .env
+      - name: tear down
+        if: always()
+        run: docker compose --profile sim --profile tools down -v
+
+  secrets:
+    name: gitleaks (secret scan of the full history)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify Gitleaks detects a generated test token
+        run: |
+          set -eu
+          probe="$(mktemp -d)"
+          trap 'rm -rf "$probe"' EXIT
+          mkdir "$probe/input"
+          token="$(openssl rand -hex 18)"
+          printf 'token = "ghp_%s"\n' "$token" > "$probe/input/canary.txt"
+          set +e
+          docker run --rm -v "$probe/input:/probe:ro" "$GITLEAKS_IMAGE" dir --no-banner --redact /probe > "$probe/result.txt" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 1 ] || ! grep -q 'leaks found: 1' "$probe/result.txt"; then
+            cat "$probe/result.txt"
+            echo "Gitleaks failed its canary check" >&2
+            exit 1
+          fi
+          echo "PASS: Gitleaks detected the synthetic canary"
+      - run: docker run --rm -v "$PWD:/repo" "$GITLEAKS_IMAGE" git /repo --redact --verbose

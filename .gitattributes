@@ -1,0 +1,17 @@
+# Force LF (Unix) line endings everywhere, so shell scripts and YAML work the
+# same in Docker on Windows, macOS and Linux. CRLF breaks "#!/bin/sh" scripts.
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sql text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.cfg text eol=lf
+*.txt text eol=lf
+Dockerfile text eol=lf
+*.png binary
+*.jpg binary
+*.mmdb binary
+*.zip binary

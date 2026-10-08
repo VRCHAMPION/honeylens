@@ -1,0 +1,31 @@
+# pre-commit runs these checks before every "git commit".
+#   pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+        args: [--unsafe]   # docker-compose.cloud.yml uses the !override tag
+      - id: check-json
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+  - repo: local
+    hooks:
+      - id: no-env-file
+        name: never commit .env or GeoIP databases
+        entry: sh -c 'for f in "$@"; do case "$f" in .env|.env.*|*/.env|*/.env.*) case "$f" in .env.example|*/.env.example) ;; *) echo "refusing to commit $f"; exit 1;; esac ;; *.mmdb|*.mmdb.gz|*.pem|*.key|*.p12|*.pfx|*.p7b|*.p7c|*.p7m|*.p7s|*.p8|*.p10|*.jks|*.keystore|*.ppk|*.crt|*.cer|*.der|*.tfstate|*.tfstate.*) echo "refusing to commit $f"; exit 1;; esac; done' --
+        language: system
+        pass_filenames: true

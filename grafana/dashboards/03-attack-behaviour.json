@@ -1,0 +1,418 @@
+{
+  "uid": "hl-attack-behaviour",
+  "title": "HoneyLens \u00b7 3. ATT&CK & Behaviour",
+  "description": "MITRE ATT&CK techniques matched by regex rules, plus behaviour classes and bot-vs-human timing.",
+  "tags": [
+    "honeylens"
+  ],
+  "timezone": "Asia/Kolkata",
+  "editable": false,
+  "graphTooltip": 1,
+  "schemaVersion": 41,
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      {
+        "name": "data",
+        "label": "Data",
+        "type": "custom",
+        "query": "all,real,simulated",
+        "current": {
+          "text": "all",
+          "value": "all"
+        },
+        "options": [
+          {
+            "text": "all",
+            "value": "all",
+            "selected": true
+          },
+          {
+            "text": "real",
+            "value": "real",
+            "selected": false
+          },
+          {
+            "text": "simulated",
+            "value": "simulated",
+            "selected": false
+          }
+        ],
+        "description": "all = everything; real = internet attackers only; simulated = HoneyLens simulator only"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "",
+      "description": "Computed from the sessions in the time range (ignores the Data filter). SIMULATED = made by the HoneyLens simulator; REAL = internet attackers.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 2
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT CASE WHEN count(*) = 0 THEN 'NO DATA' WHEN bool_and(is_simulated) THEN 'SIMULATED' WHEN NOT bool_or(is_simulated) THEN 'REAL' ELSE 'MIXED \u00b7 ' || round(100.0 * count(*) FILTER (WHERE is_simulated) / count(*)) || '% SIM' END AS \"DATA MODE\" FROM honeylens.sessions WHERE $__timeFilter(start_ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "SIMULATED": {
+                  "color": "#b45309",
+                  "index": 0
+                },
+                "REAL": {
+                  "color": "#15803d",
+                  "index": 1
+                },
+                "NO DATA": {
+                  "color": "#475569",
+                  "index": 2
+                }
+              }
+            },
+            {
+              "type": "regex",
+              "options": {
+                "pattern": "^MIXED.*",
+                "result": {
+                  "color": "#a16207",
+                  "index": 3
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        },
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 16
+        }
+      },
+      "transparent": false
+    },
+    {
+      "id": 2,
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 18,
+        "h": 2
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "<div style='font-family:monospace;font-size:12px;line-height:1.5;color:#c7ccd6;border-left:3px solid #b45309;padding:2px 8px'>Simulated = RFC 5737 documentation IPs, private Docker addresses or the synthetic generator (never real attackers). Filter with <b>Data</b> = all / real / simulated. Times in IST (Asia/Kolkata); stored in UTC.</div>"
+      }
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "Sessions per ATT&CK tactic",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 2,
+        "w": 10,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT tactic AS \"Tactic\", count(DISTINCT session_id) AS \"Sessions\" FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "xField": "Tactic",
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Techniques seen",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 2,
+        "w": 14,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT technique_id AS \"ID\", technique_name AS \"Technique\", tactic AS \"Tactic\", count(DISTINCT session_id) AS \"Sessions\", count(*) AS \"Matches\" FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT 25"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Top techniques per day",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT $__timeGroupAlias(ts, 1d), technique_id AS metric, count(DISTINCT session_id) AS value FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) AND technique_id IN (SELECT technique_id FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1 ORDER BY count(*) DESC LIMIT 6) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "type": "piechart",
+      "title": "Bot vs human (command timing)",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 6,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT coalesce(actor_type,'unknown') AS metric, count(*) AS value FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) AND commands_count > 0 GROUP BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "pieType": "pie",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "barchart",
+      "title": "Average severity by class",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 12,
+        "w": 6,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT classification AS \"Class\", round(avg(severity)::numeric,1) AS \"Avg severity\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "xField": "Class",
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Rule hits (which detection rules fire)",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT rule_id AS \"Rule\", technique_id AS \"Technique\", confidence AS \"Confidence\", count(*) AS \"Hits\" FROM honeylens.attack_matches WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Command coverage",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeylens-pg"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeylens-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT count(*) FILTER (WHERE mapped) AS \"Mapped commands\", count(*) FILTER (WHERE NOT mapped) AS \"Unmapped commands\", round(100.0 * count(*) FILTER (WHERE mapped) / greatest(count(*),1), 1) AS \"Mapped %\" FROM honeylens.commands WHERE $__timeFilter(ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated'))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    }
+  ],
+  "version": 1,
+  "links": [
+    {
+      "title": "HoneyLens dashboards",
+      "type": "dashboards",
+      "tags": [
+        "honeylens"
+      ],
+      "asDropdown": true
+    }
+  ]
+}

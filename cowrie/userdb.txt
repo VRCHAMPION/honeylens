@@ -1,0 +1,20 @@
+# Cowrie UserDB: which username/password pairs "succeed" (all fake!).
+# Format: username:uid:password      (exact pairs only in this project)
+#
+# Documented successful fake credentials (from README):
+#   root   / admin123
+#   admin  / admin
+#   ubuntu / ubuntu
+#   pi     / raspberry
+#   root   / xc3511   (Mirai-style default)
+#
+# ONLY these exact pairs succeed. There is NO wildcard ("*") line, so every
+# other username/password pair fails. tests/test_cowrie_userdb.py enforces this.
+#
+# Why allow weak passwords: bots only show their full behaviour (downloads,
+# persistence, miners) AFTER they think they got in.
+root:x:admin123
+root:x:xc3511
+admin:x:admin
+ubuntu:x:ubuntu
+pi:x:raspberry

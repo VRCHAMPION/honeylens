@@ -1,0 +1,22 @@
+# Grafana datasource, provisioned from this file at startup (no clicking).
+# Connects with the READ-ONLY role hl_grafana. The password comes from the
+# container environment ($HL_GRAFANA_DB_PASSWORD), never from this file.
+apiVersion: 1
+datasources:
+  - name: HoneyLens PostgreSQL
+    uid: honeylens-pg
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: postgres:5432
+    user: hl_grafana
+    isDefault: true
+    editable: false
+    jsonData:
+      database: ${POSTGRES_DB}
+      sslmode: disable          # traffic stays on the private Docker network
+      timescaledb: false
+      maxOpenConns: 5
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+    secureJsonData:
+      password: ${HL_GRAFANA_DB_PASSWORD}

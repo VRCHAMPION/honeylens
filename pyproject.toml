@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=83.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "honeylens"
+version = "1.0.0"
+description = "SSH honeypot (Cowrie) + threat-intelligence pipeline, dashboards and reports for learning."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "HoneyLens contributors" }]
+# Minimal runtime dependencies (each one is attack surface and maintenance):
+dependencies = [
+  "psycopg[binary]==3.3.6",   # PostgreSQL driver
+  "PyYAML==6.0.2",            # ATT&CK rule files
+  "maxminddb==3.2.0",         # read local GeoIP .mmdb files
+  "paramiko==5.0.0",          # SSH client for the live simulator
+  "Jinja2==3.1.6",            # HTML report with auto-escaping
+]
+
+[project.optional-dependencies]
+dev = [
+  "setuptools>=83.0.0",       # keep the test/build environment off vulnerable old bootstrap versions
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "ruff==0.16.10",
+  "bandit==1.9.4",
+  "pip-audit==2.10.1",
+  "pre-commit==4.6.2",
+  "stix2==3.0.2",             # OASIS STIX 2.1 library: validates our STIX exports in tests/CI
+]
+
+[project.scripts]
+honeylens-pipeline = "honeylens.pipeline.runner:main"
+honeylens-report = "honeylens.reporting.cli:main"
+honeylens-simulator = "honeylens.simulator.cli:main"
+honeylens-migrate = "honeylens.migrate:main"
+honeylens-report-scheduler = "honeylens.reporting.scheduler:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"honeylens.mitre" = ["rules.yaml", "data/*.json"]
+"honeylens.reporting" = ["templates/*.html"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "BLE", "D1"]
+ignore = ["D104", "D105", "D107", "S101", "S311", "S608"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "S", "BLE", "E501"]
+"scripts/*" = ["D"]
+"scripts/build_dashboards.py" = ["D", "E501"]
+"scripts/integration_test.py" = ["D", "E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+  "db: needs a PostgreSQL server (HL_TEST_DSN_ADMIN)",
+  "docker: needs the running Compose stack",
+]
+
+[tool.coverage.run]
+source = ["honeylens"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+
+[tool.bandit]
+# B608 ("SQL built from strings") is skipped on purpose: every query joins only
+# CONSTANT fragments written in this repo; all values (dates, filters, attacker
+# text) are passed separately as %s / %(name)s parameters. Tests insert
+# "'; DROP TABLE ..." payloads to prove it (tests/test_pipeline_db.py).
+skips = ["B608"]
+exclude_dirs = ["tests", ".venv"]

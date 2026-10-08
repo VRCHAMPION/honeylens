@@ -1,0 +1,41 @@
+# HoneyLens - CLOUD override. Runtime behavior on a real cloud VM has not been
+# verified; validate the merged Compose config and public-port policy before use.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d --build
+#
+# Differences from the laptop stack:
+#   * Cowrie is published on PUBLIC port 22 (attackers expect SSH on 22).
+#     Your real admin SSH must first be moved to a private port (see DEPLOY_CLOUD.md).
+#   * Grafana stays on 127.0.0.1:3000 - reach it with an SSH tunnel only.
+#   * PostgreSQL stays unpublished on the internal network.
+#   * Cowrie gets its own fixed subnet so deploy/egress-lockdown.sh can block ALL
+#     outbound traffic from it with host firewall rules (DOCKER-USER chain).
+#   * Tighter resource limits for a small free-tier VM.
+
+services:
+  cowrie:
+    ports: !override
+      - "0.0.0.0:22:2222"
+    networks: !override
+      - cowrie_net
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m, pids: 96 }
+
+  grafana:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+
+  pipeline:
+    environment:
+      HL_TREAT_PRIVATE_AS_SIMULATED: "true"   # only simulator traffic can be private
+      HL_RETENTION_DAYS: ${HL_RETENTION_DAYS:-60}
+
+networks:
+  cowrie_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24     # fixed so the egress firewall rule can target it
+    driver_opts:
+      com.docker.network.bridge.name: hl-cowrie0

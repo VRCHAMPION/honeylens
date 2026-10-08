@@ -1,0 +1,227 @@
+{
+  "name": "HoneyLens observed (all)",
+  "versions": {
+    "attack": "19",
+    "navigator": "5.3.2",
+    "layer": "4.5"
+  },
+  "domain": "enterprise-attack",
+  "description": "Techniques seen on the honeypot this week; score = sessions.",
+  "techniques": [
+    {
+      "techniqueID": "T1003.008",
+      "tactic": "credential-access",
+      "score": 62,
+      "comment": "/etc/passwd and /etc/shadow: 62",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1007",
+      "tactic": "discovery",
+      "score": 136,
+      "comment": "System Service Discovery: 136",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1016",
+      "tactic": "discovery",
+      "score": 91,
+      "comment": "System Network Configuration Discovery: 91",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1033",
+      "tactic": "discovery",
+      "score": 119,
+      "comment": "System Owner/User Discovery: 119",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1036",
+      "tactic": "stealth",
+      "score": 45,
+      "comment": "Masquerading: 45",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1053.003",
+      "tactic": "execution",
+      "score": 45,
+      "comment": "Cron: 45",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1053.003",
+      "tactic": "persistence",
+      "score": 45,
+      "comment": "Cron: 45",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1053.003",
+      "tactic": "privilege-escalation",
+      "score": 45,
+      "comment": "Cron: 45",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1057",
+      "tactic": "discovery",
+      "score": 91,
+      "comment": "Process Discovery: 91",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1059.004",
+      "tactic": "execution",
+      "score": 102,
+      "comment": "Unix Shell: 102",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1070.003",
+      "tactic": "stealth",
+      "score": 28,
+      "comment": "Clear Command History: 28",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1070.004",
+      "tactic": "stealth",
+      "score": 57,
+      "comment": "File Deletion: 57",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1082",
+      "tactic": "discovery",
+      "score": 136,
+      "comment": "System Information Discovery: 136",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1083",
+      "tactic": "discovery",
+      "score": 91,
+      "comment": "File and Directory Discovery: 91",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1098",
+      "tactic": "persistence",
+      "score": 62,
+      "comment": "Account Manipulation: 62",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1098",
+      "tactic": "privilege-escalation",
+      "score": 62,
+      "comment": "Account Manipulation: 62",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1098.004",
+      "tactic": "persistence",
+      "score": 62,
+      "comment": "SSH Authorized Keys: 62",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1098.004",
+      "tactic": "privilege-escalation",
+      "score": 62,
+      "comment": "SSH Authorized Keys: 62",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1105",
+      "tactic": "command-and-control",
+      "score": 102,
+      "comment": "Ingress Tool Transfer: 102",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1496.001",
+      "tactic": "impact",
+      "score": 45,
+      "comment": "Compute Hijacking: 45",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1497.001",
+      "tactic": "discovery",
+      "score": 23,
+      "comment": "System Checks: 23",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1497.001",
+      "tactic": "stealth",
+      "score": 23,
+      "comment": "System Checks: 23",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1552.001",
+      "tactic": "credential-access",
+      "score": 28,
+      "comment": "Credentials In Files: 28",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1552.003",
+      "tactic": "credential-access",
+      "score": 28,
+      "comment": "Shell History: 28",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1564.001",
+      "tactic": "stealth",
+      "score": 45,
+      "comment": "Hidden Files and Directories: 45",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1685",
+      "tactic": "defense-impairment",
+      "score": 45,
+      "comment": "Disable or Modify Tools: 45",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1685.006",
+      "tactic": "defense-impairment",
+      "score": 28,
+      "comment": "Clear Linux or Mac System Logs: 28",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1686",
+      "tactic": "defense-impairment",
+      "score": 28,
+      "comment": "Disable or Modify System Firewall: 28",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1690",
+      "tactic": "defense-impairment",
+      "score": 28,
+      "comment": "Prevent Command History Logging: 28",
+      "enabled": true
+    }
+  ],
+  "gradient": {
+    "colors": [
+      "#fff3b0",
+      "#e09f3e",
+      "#9e2a2b"
+    ],
+    "minValue": 0,
+    "maxValue": 136
+  },
+  "legendItems": [],
+  "showTacticRowBackground": true,
+  "selectTechniquesAcrossTactics": true
+}

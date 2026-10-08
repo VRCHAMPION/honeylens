@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{# Content-Security-Policy: nothing external, no scripts at all. The report is fully self-contained. #}
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>HoneyLens weekly report · {{ w_start }} to {{ w_end }}</title>
+<style>
+/* Analyst-report style: print-friendly, neutral greys, colour only for severity/data mode. */
+:root{--ink:#1f2328;--muted:#59636e;--line:#d1d9e0;--soft:#f6f8fa;--crit:#9b1c1c;--high:#b4441b;--med:#8a6d0b;--low:#2f6f44;--sim:#9a5b0b}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 -apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff}
+main{max-width:980px;margin:0 auto;padding:28px 24px 56px}
+header{border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:14px}
+h1{margin:0 0 2px;font-size:22px;font-weight:600;letter-spacing:.2px}
+h2{font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin:30px 0 8px;padding-top:12px;border-top:1px solid var(--line)}
+p{margin:6px 0 10px}.muted{color:var(--muted)}
+.meta{width:100%;border:1px solid var(--line);border-collapse:collapse;font-size:12.5px;margin:10px 0}
+.meta td{padding:4px 8px;border:1px solid var(--line)}.meta td.k{background:var(--soft);color:var(--muted);width:16%;white-space:nowrap}
+.mode{display:inline-block;font:600 12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:0 6px;border:1px solid currentColor;border-radius:2px}
+.mode.sim{color:var(--sim)}.mode.real{color:var(--low)}
+.tlp{font:600 11px/1.6 ui-monospace,Menlo,Consolas,monospace;background:#000;color:#fff;padding:1px 6px;border-radius:2px}
+.note{border-left:3px solid var(--sim);background:#fffaf0;padding:6px 10px;margin:10px 0;font-size:13px}
+.note.real{border-left-color:var(--low);background:#f3faf5}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin:6px 0}
+th,td{text-align:left;padding:4px 7px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);border-bottom:1px solid var(--ink);background:none;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px}
+tr:nth-child(even) td{background:#fbfcfd}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+code{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media(max-width:760px){.two{grid-template-columns:1fr}}
+.sev{display:inline-block;min-width:74px;font:600 11px/1.6 ui-monospace,Menlo,Consolas,monospace;padding:0 5px;border-left:4px solid;text-transform:uppercase}
+.sev.critical{color:var(--crit);border-color:var(--crit)}.sev.high{color:var(--high);border-color:var(--high)}
+.sev.medium{color:var(--med);border-color:var(--med)}.sev.low,.sev.info{color:var(--low);border-color:var(--low)}
+.up{color:var(--crit)}.down{color:var(--low)}
+.tag{display:inline-block;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:0 4px;border:1px solid var(--line);margin:1px 2px 1px 0;color:var(--muted)}
+.tag.sim{color:var(--sim);border-color:#e7c48f}
+ul.take li{margin:4px 0}footer{margin-top:36px;padding-top:8px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+@media print{main{padding:0}h2{break-after:avoid}table{break-inside:auto}tr{break-inside:avoid}}
+</style>
+</head>
+<body><main>
+<header>
+  <h1>HoneyLens weekly threat report</h1>
+  <div class="muted">SSH honeypot activity summary · {{ w_start }} → {{ w_end }} (IST)</div>
+</header>
+<table class="meta">
+<tr><td class="k">Period</td><td>{{ w_start }} → {{ w_end }} (IST, Asia/Kolkata; stored in UTC)</td><td class="k">Distribution</td><td><span class="tlp">TLP:CLEAR</span>{% if mask_ips %} · IPs masked{% endif %}</td></tr>
+<tr><td class="k">Data mode</td><td>{% if d.data_filter != 'real' and d.sim_share > 0 %}<span class="mode sim">DATA MODE: SIMULATED</span> {{ '%.0f'|format(d.sim_share*100) }}% of sessions{% elif d.totals.sessions %}<span class="mode real">DATA MODE: REAL</span>{% else %}<span class="mode">NO DATA</span>{% endif %} · filter <code>{{ d.data_filter }}</code></td>
+<td class="k">Generated</td><td>{{ generated }}</td></tr>
+<tr><td class="k">Sensor</td><td>Cowrie {{ cowrie_version }} (SSH) · ATT&amp;CK v{{ attack_version }} · {{ rule_count }} rules</td><td class="k">Version</td><td>HoneyLens {{ version }}</td></tr>
+</table>
+
+{% if d.data_filter != 'real' and d.sim_share > 0 %}
+<div class="note"><b>SIMULATED DATA:</b> {{ '%.0f'|format(d.sim_share*100) }}% of sessions in this window came from the HoneyLens simulator
+(RFC 5737 documentation IPs, <code>.invalid</code> domains). Numbers describe the simulator, not real attackers.</div>
+{% elif d.totals.sessions %}
+<div class="note real"><b>REAL DATA:</b> sessions from the internet-facing honeypot only.</div>
+{% endif %}
+
+<h2>1. Executive summary</h2>
+<p>{{ summary_text }}</p>
+<table>
+<tr><th>Metric</th><th class="num">This period</th><th class="num">Previous period</th><th class="num">Change</th></tr>
+{% for k, label in kpis %}{% set c = change(k) %}
+<tr><td>{{ label }}</td><td class="num"><b>{{ d.totals[k] }}</b></td><td class="num">{{ d.prev_totals[k] }}</td><td class="num {{ c.cls }}">{{ c.text }} vs previous week</td></tr>
+{% endfor %}
+</table>
+{% if daily_svg %}<p class="muted" style="margin:12px 0 2px;font-size:12px">Sessions per day (IST)</p>{{ daily_svg|safe }}{% endif %}
+
+<h2>2. Where traffic came from</h2>
+<p class="muted">GeoIP shows where an IP is <i>registered</i>. Attackers relay through hacked servers, clouds and VPNs (Virtual Private Networks), so this is <b>not attribution</b>.</p>
+<div class="two">
+<table><tr><th>Country</th><th class="num">Sessions</th><th class="num">IPs</th></tr>
+{% for r in d.countries %}<tr><td>{{ r.country }}</td><td class="num">{{ r.sessions }}</td><td class="num">{{ r.ips }}</td></tr>{% endfor %}</table>
+<table><tr><th>Network (ASN)</th><th class="num">Sessions</th><th class="num">IPs</th></tr>
+{% for r in d.asns %}<tr><td>{% if r.asn %}AS{{ r.asn }} {% endif %}{{ r.as_org }}</td><td class="num">{{ r.sessions }}</td><td class="num">{{ r.ips }}</td></tr>{% endfor %}</table>
+</div>
+<p></p>
+<table><tr><th>Source IP (defanged)</th><th>Country</th><th>Network</th><th class="num">Sessions</th><th class="num">Logins</th><th class="num">Max severity</th></tr>
+{% for r in d.ips %}<tr><td><code>{{ ip(r.ip) }}</code>{% if r.simulated %} <span class="tag sim">sim</span>{% endif %}</td><td>{{ r.country or '' }}</td><td>{{ r.as_org or '' }}</td>
+<td class="num">{{ r.sessions }}</td><td class="num">{{ r.logins }}</td><td class="num">{{ r.max_severity }}</td></tr>{% endfor %}</table>
+
+<h2>3. Credentials and commands</h2>
+<p class="muted">Passwords below were typed by attackers into a fake server. They are not anyone's real credentials.</p>
+<div class="two">
+<table><tr><th>Username</th><th class="num">Attempts</th></tr>{% for r in d.usernames %}<tr><td><code>{{ r.username }}</code></td><td class="num">{{ r.attempts }}</td></tr>{% endfor %}</table>
+<table><tr><th>Password</th><th class="num">Attempts</th></tr>{% for r in d.passwords %}<tr><td><code>{{ r.password }}</code></td><td class="num">{{ r.attempts }}</td></tr>{% endfor %}</table>
+</div><p></p>
+<table><tr><th>Top commands</th><th class="num">Times</th><th class="num">Sessions</th><th>ATT&amp;CK mapped</th></tr>
+{% for r in d.commands %}<tr><td><code>{{ defang(r.command) }}</code></td><td class="num">{{ r.times }}</td><td class="num">{{ r.sessions }}</td><td>{{ 'yes' if r.mapped else 'no' }}</td></tr>{% endfor %}</table>
+
+<h2>4. MITRE ATT&amp;CK techniques</h2>
+<p class="muted">ATT&amp;CK = Adversarial Tactics, Techniques, and Common Knowledge (v{{ attack_version }}). Matches come from regex rules on commands; see methodology.</p>
+<div class="two">
+<table><tr><th>Technique</th><th>Tactic</th><th class="num">Sessions</th></tr>
+{% for t in d.techniques %}<tr><td><b>{{ t.technique_id }}</b> {{ t.technique_name }}</td><td>{{ t.tactic }}</td><td class="num">{{ t.sessions }}</td></tr>{% endfor %}</table>
+<div>
+<table><tr><th>Behaviour class</th><th class="num">Sessions</th><th class="num">Avg severity</th></tr>
+{% for c in d.classes %}<tr><td>{{ c.classification }}</td><td class="num">{{ c.sessions }}</td><td class="num">{{ c.avg_severity }}</td></tr>{% endfor %}</table><p></p>
+<table><tr><th>Actor (timing heuristic)</th><th class="num">Sessions</th></tr>
+{% for a in d.actors %}<tr><td>{{ a.actor_type }}</td><td class="num">{{ a.sessions }}</td></tr>{% endfor %}</table>
+</div></div>
+{% if d.unmapped %}<p><b>Unmapped commands</b> (no rule yet - candidates for new rules):
+{% for u in d.unmapped %}<code>{{ defang(u.command) }}</code> ({{ u.times }}){% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+
+<h2>5. Notable sessions</h2>
+<table><tr><th>When (IST)</th><th>Source</th><th>Class</th><th class="num">Severity</th><th>Summary</th></tr>
+{% for s in d.notable %}<tr><td>{{ ist(s.start_ts) }}</td><td><code>{{ ip(s.ip) }}</code>{% if s.is_simulated %} <span class="tag sim">sim</span>{% endif %}</td>
+<td>{{ s.classification }}<br><span class="muted">{{ s.actor_type }}</span></td><td class="num"><span class="sev {{ s.severity_label }}">{{ s.severity }} {{ s.severity_label }}</span></td>
+<td>{{ summary(s.summary) }}<br>{% for t in s.techniques or [] %}<span class="tag">{{ t }}</span>{% endfor %}</td></tr>{% endfor %}</table>
+
+<h2>6. Indicators of compromise (IOCs)</h2>
+<p class="muted">Defanged so nothing is clickable. Full machine-readable lists: <code>iocs.csv</code>, <code>iocs.stix.json</code>. HoneyLens never downloads these URLs.</p>
+<table><tr><th>Type</th><th>Value</th><th class="num">Count</th><th>First seen (IST)</th></tr>
+{% for r in d.ioc_urls[:15] %}<tr><td>URL</td><td><code>{{ defang(r.url) }}</code></td><td class="num">{{ r.attempts }}</td><td>{{ ist(r.first_seen) }}</td></tr>{% endfor %}
+{% for r in d.ioc_hashes[:10] %}<tr><td>SHA-256</td><td><code>{{ r.shasum }}</code></td><td class="num">{{ r.seen }}</td><td>{{ ist(r.first_seen) }}</td></tr>{% endfor %}
+{% for r in d.ioc_ips[:15] %}<tr><td>IP</td><td><code>{{ ip(r.ip) }}</code></td><td class="num">{{ r.sessions }}</td><td>{{ ist(r.first_seen) }}</td></tr>{% endfor %}
+</table>
+
+<h2>7. Defender takeaways</h2>
+<ul class="take">{% for t in takeaways %}<li>{{ t }}</li>{% endfor %}</ul>
+
+<h2>8. Methodology and limitations</h2>
+<ul>
+<li>Data: Cowrie {{ cowrie_version }} SSH honeypot JSON logs, parsed by the HoneyLens pipeline into PostgreSQL. Times stored in UTC, shown in IST.</li>
+<li>ATT&amp;CK mapping: {{ rule_count }} regex rules against Enterprise ATT&amp;CK v{{ attack_version }}. A regex match is evidence, not proof; obfuscated commands can be missed (false negatives) and harmless text can match (false positives).</li>
+<li>Severity (0-100) and classes are transparent heuristics; each session stores the reasons for its score. Bot-vs-human uses command timing and needs at least 3 commands.</li>
+  <li>GeoIP/ASN: offline MMDB databases if installed; simulator IPs get deterministic <b>demo</b> values (private-use ASNs 64512+). Registration location is not attacker identity. If DB-IP Lite is configured, attribution is “IP Geolocation by DB-IP” (CC BY 4.0); other database providers have their own terms.</li>
+<li>A honeypot only sees attackers who chose to connect to it. It does not measure attacks against other systems.</li>
+<li>Week-over-week compares {{ days }}-day windows; small numbers swing a lot in percentage.</li>
+</ul>
+<footer>HoneyLens {{ version }} · self-contained report (no scripts, no external resources) · do not use for attribution or retaliation.</footer>
+</main></body></html>

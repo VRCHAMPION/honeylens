@@ -1,0 +1,316 @@
+# HoneyLens - laptop stack (Docker Compose v2; the old "version:" key is obsolete and omitted)
+#
+#   docker compose up -d --build                       # start everything
+#   docker compose --profile sim run --rm simulator    # send safe fake attacks
+#
+# SAFETY (checked by scripts/check_ports.py):
+#   * only TWO ports are published, and only on 127.0.0.1 (loopback):
+#       127.0.0.1:2222 -> Cowrie SSH honeypot
+#       127.0.0.1:3000 -> Grafana dashboards
+#   * PostgreSQL has NO published port; it lives on an internal network.
+#   * no host networking, no privileged containers, no Docker socket mounts.
+
+name: honeylens
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-hl-env: &hl-env
+  POSTGRES_DB: ${POSTGRES_DB:-honeylens}
+  HL_DB_HOST: postgres
+  HL_DB_PORT: "5432"
+  HL_LOG_LEVEL: ${HL_LOG_LEVEL:-INFO}
+  TZ: UTC
+
+services:
+  postgres:
+    <<: *hardening
+    # PostgreSQL 18 (current major, supported until Nov 2030). The 18+ image keeps data in
+    # /var/lib/postgresql/18/docker, so the volume is mounted on /var/lib/postgresql (not .../data).
+    # A volume created by the old 17.11 pin needs a dump/restore.
+    image: postgres:18.6-trixie
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-honeylens}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      TZ: UTC
+      PGTZ: UTC
+    # The official entrypoint starts as root, fixes folder ownership, then
+    # drops to the "postgres" user. These are the only capabilities it needs.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    volumes:
+      - pg_data:/var/lib/postgresql
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 768m, pids: 200 }
+
+  migrate:
+    # One-shot job: creates roles + applies SQL migrations, then exits 0.
+    <<: *hardening
+    build: .
+    image: honeylens:1.0.0
+    command: ["honeylens-migrate"]
+    restart: "no"
+    read_only: true
+    environment:
+      <<: *hl-env
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      HL_PIPELINE_DB_PASSWORD: ${HL_PIPELINE_DB_PASSWORD:?set in .env}
+      HL_GRAFANA_DB_PASSWORD: ${HL_GRAFANA_DB_PASSWORD:?set in .env}
+      HL_REPORT_DB_PASSWORD: ${HL_REPORT_DB_PASSWORD:?set in .env}
+      # Checked (not used) here so a placeholder Grafana password also stops the stack.
+      GF_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:?set GF_ADMIN_PASSWORD in .env}
+    networks: [backend]
+    depends_on:
+      postgres: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m, pids: 32 }
+
+  cowrie:
+    <<: *hardening
+    image: cowrie/cowrie:3.1.1
+    user: "999:999"            # Cowrie's own non-root user
+    read_only: true            # root filesystem cannot be changed
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    ports:
+      - "127.0.0.1:2222:2222"  # loopback only: nobody on your Wi-Fi can reach it
+    volumes:
+      - cowrie_var:/cowrie/cowrie-git/var
+      - cowrie_etc:/cowrie/cowrie-git/etc
+      - ./cowrie/cowrie.cfg:/cowrie/cowrie-git/etc/cowrie.cfg:ro
+      - ./cowrie/userdb.txt:/cowrie/cowrie-git/etc/userdb.txt:ro
+      - ./cowrie/honeyfs:/cowrie/honeyfs:ro
+    networks: [edge]
+    healthcheck:
+      # The image is "distroless" (no shell), so we test the port with Python.
+      test: ["CMD", "/cowrie/cowrie-env/bin/python3", "-c", "import socket; socket.create_connection(('127.0.0.1', 2222), 3).close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 384m, pids: 128 }
+
+  pipeline:
+    <<: *hardening
+    image: honeylens:1.0.0
+    command: ["honeylens-pipeline"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    environment:
+      <<: *hl-env
+      HL_DB_USER: hl_pipeline
+      HL_DB_PASSWORD: ${HL_PIPELINE_DB_PASSWORD}
+      HL_INPUT_GLOB: /cowrie-var/log/cowrie/cowrie.json*
+      HL_EXTRA_INPUT_GLOB: /synthetic/*.json
+      HL_BATCH_SIZE: ${HL_BATCH_SIZE:-500}
+      HL_POLL_MS: ${HL_POLL_MS:-1000}
+      HL_MAX_LINE_BYTES: ${HL_MAX_LINE_BYTES:-65536}
+      HL_RETENTION_DAYS: ${HL_RETENTION_DAYS:-90}
+      HL_TREAT_PRIVATE_AS_SIMULATED: ${HL_TREAT_PRIVATE_AS_SIMULATED:-true}
+      HL_MMDB_CITY: /geoip/dbip-city-lite.mmdb
+      HL_MMDB_ASN: /geoip/dbip-asn-lite.mmdb
+      HL_ENRICH_API_TOKEN: ${HL_ENRICH_API_TOKEN:-}
+      HL_ENRICH_CACHE_DAYS: ${HL_ENRICH_CACHE_DAYS:-30}
+      HL_ENRICH_API_MAX_PER_MINUTE: ${HL_ENRICH_API_MAX_PER_MINUTE:-30}
+      HL_ENRICH_API_TIMEOUT_S: ${HL_ENRICH_API_TIMEOUT_S:-3}
+    volumes:
+      - cowrie_var:/cowrie-var:ro     # read-only: the pipeline can never alter evidence
+      - hl_synthetic:/synthetic:ro
+      - ./geoip:/geoip:ro             # optional GeoIP files (git-ignored)
+    # The only service allowed outbound access, for opt-in IPInfo enrichment.
+    networks: [backend, egress]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/heartbeat')<120 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512m, pids: 64 }
+
+  grafana:
+    <<: *hardening
+    image: grafana/grafana:12.4.12
+    user: "472:0"               # Grafana's own non-root user
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    ports:
+      - "127.0.0.1:3000:3000"   # loopback only
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:?set GF_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_SECURITY_COOKIE_SAMESITE: strict
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_DATE_FORMATS_DEFAULT_TIMEZONE: Asia/Kolkata
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/01-soc-overview.json
+      HL_GRAFANA_DB_PASSWORD: ${HL_GRAFANA_DB_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-honeylens}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks: [backend, edge]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512m, pids: 256 }
+
+  report-scheduler:
+    # Long-running: writes the weekly report every Monday 06:00 IST (configurable)
+    # into the named volume hl_reports, one dated folder per run. Reuses the
+    # honeylens-report code and the READ-ONLY hl_report database role.
+    #   copy out:  docker compose cp report-scheduler:/out ./out
+    #   run now:   docker compose exec report-scheduler honeylens-report-scheduler --run-now
+    <<: *hardening
+    image: honeylens:1.0.0
+    command: ["honeylens-report-scheduler"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    environment:
+      <<: *hl-env
+      HL_DB_USER: hl_report
+      HL_DB_PASSWORD: ${HL_REPORT_DB_PASSWORD}
+      HL_REPORT_SCHEDULE: ${HL_REPORT_SCHEDULE:-MON 06:00}
+      HL_REPORT_TZ: ${HL_REPORT_TZ:-Asia/Kolkata}
+      HL_REPORT_MASK_IPS: ${HL_REPORT_MASK_IPS:-false}
+      HL_REPORT_OUT: /out
+    volumes:
+      - hl_reports:/out
+    networks: [backend]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/heartbeat')<180 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m, pids: 32 }
+
+  # ---------------------------------------------------------------------
+  # Optional tools (profiles). They do not start with "docker compose up".
+  #
+  # One-shot jobs (migrate above, simulator, synthetic, report) run once and
+  # exit. They deliberately have NO healthcheck (there is no "healthy" state
+  # for a job that is meant to finish) and restart: "no" (restarting a finished
+  # job would re-run it forever). They still get every other hardening rule:
+  # read-only filesystem, cap_drop ALL, no-new-privileges, non-root user,
+  # log-size limits and CPU/memory/PID limits. tests/test_compose_hardening.py
+  # enforces both groups of rules.
+  # ---------------------------------------------------------------------
+  simulator:
+    # Real SSH sessions against the Cowrie container only (guard-railed).
+    <<: *hardening
+    profiles: ["sim"]
+    image: honeylens:1.0.0
+    restart: "no"
+    read_only: true
+    command: ["honeylens-simulator", "live", "--target", "cowrie", "--port", "2222", "--sessions", "16", "--seed", "7"]
+    environment:
+      HL_SIM_ALLOWED_HOSTS: ${HL_SIM_ALLOWED_HOSTS:-}
+      HL_SIM_COMPOSE_SERVICES: cowrie
+    networks: [edge]
+    depends_on:
+      cowrie: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m, pids: 64 }
+
+  synthetic:
+    # Deterministic fake Cowrie events (no network at all) for demo dashboards.
+    <<: *hardening
+    profiles: ["sim"]
+    image: honeylens:1.0.0
+    restart: "no"
+    read_only: true
+    command: ["honeylens-simulator", "synthetic", "--seed", "42", "--days", "14", "--out", "/synthetic/synthetic-seed42.json"]
+    volumes:
+      - hl_synthetic:/synthetic
+    network_mode: none
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512m, pids: 32 }
+
+  report:
+    # Weekly HTML report + IOC exports into ./out (read-only DB role).
+    <<: *hardening
+    profiles: ["tools"]
+    image: honeylens:1.0.0
+    restart: "no"
+    read_only: true
+    user: "${HL_HOST_UID:-10001}:${HL_HOST_GID:-10001}"
+    command: ["honeylens-report", "--out", "/out"]
+    environment:
+      <<: *hl-env
+      HL_DB_USER: hl_report
+      HL_DB_PASSWORD: ${HL_REPORT_DB_PASSWORD}
+    volumes:
+      - ./out:/out
+    networks: [backend]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m, pids: 32 }
+
+networks:
+  backend:
+    # Internal database network; no route to the internet.
+    internal: true
+  edge:
+    # Keep the Cowrie/simulator/Grafana side local to the project.
+    internal: true
+  egress: {}
+
+volumes:
+  pg_data:
+  cowrie_var:
+  cowrie_etc:
+  grafana_data:
+  hl_synthetic:
+  hl_reports:

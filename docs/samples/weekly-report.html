@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>HoneyLens weekly report · 2026-09-30 01:45 IST to 2026-10-07 01:45 IST</title>
+<style>
+/* Analyst-report style: print-friendly, neutral greys, colour only for severity/data mode. */
+:root{--ink:#1f2328;--muted:#59636e;--line:#d1d9e0;--soft:#f6f8fa;--crit:#9b1c1c;--high:#b4441b;--med:#8a6d0b;--low:#2f6f44;--sim:#9a5b0b}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 -apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff}
+main{max-width:980px;margin:0 auto;padding:28px 24px 56px}
+header{border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:14px}
+h1{margin:0 0 2px;font-size:22px;font-weight:600;letter-spacing:.2px}
+h2{font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin:30px 0 8px;padding-top:12px;border-top:1px solid var(--line)}
+p{margin:6px 0 10px}.muted{color:var(--muted)}
+.meta{width:100%;border:1px solid var(--line);border-collapse:collapse;font-size:12.5px;margin:10px 0}
+.meta td{padding:4px 8px;border:1px solid var(--line)}.meta td.k{background:var(--soft);color:var(--muted);width:16%;white-space:nowrap}
+.mode{display:inline-block;font:600 12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:0 6px;border:1px solid currentColor;border-radius:2px}
+.mode.sim{color:var(--sim)}.mode.real{color:var(--low)}
+.tlp{font:600 11px/1.6 ui-monospace,Menlo,Consolas,monospace;background:#000;color:#fff;padding:1px 6px;border-radius:2px}
+.note{border-left:3px solid var(--sim);background:#fffaf0;padding:6px 10px;margin:10px 0;font-size:13px}
+.note.real{border-left-color:var(--low);background:#f3faf5}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin:6px 0}
+th,td{text-align:left;padding:4px 7px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);border-bottom:1px solid var(--ink);background:none;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px}
+tr:nth-child(even) td{background:#fbfcfd}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+code{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media(max-width:760px){.two{grid-template-columns:1fr}}
+.sev{display:inline-block;min-width:74px;font:600 11px/1.6 ui-monospace,Menlo,Consolas,monospace;padding:0 5px;border-left:4px solid;text-transform:uppercase}
+.sev.critical{color:var(--crit);border-color:var(--crit)}.sev.high{color:var(--high);border-color:var(--high)}
+.sev.medium{color:var(--med);border-color:var(--med)}.sev.low,.sev.info{color:var(--low);border-color:var(--low)}
+.up{color:var(--crit)}.down{color:var(--low)}
+.tag{display:inline-block;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:0 4px;border:1px solid var(--line);margin:1px 2px 1px 0;color:var(--muted)}
+.tag.sim{color:var(--sim);border-color:#e7c48f}
+ul.take li{margin:4px 0}footer{margin-top:36px;padding-top:8px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+@media print{main{padding:0}h2{break-after:avoid}table{break-inside:auto}tr{break-inside:avoid}}
+</style>
+</head>
+<body><main>
+<header>
+  <h1>HoneyLens weekly threat report</h1>
+  <div class="muted">SSH honeypot activity summary · 2026-09-30 01:45 IST → 2026-10-07 01:45 IST (IST)</div>
+</header>
+<table class="meta">
+<tr><td class="k">Period</td><td>2026-09-30 01:45 IST → 2026-10-07 01:45 IST (IST, Asia/Kolkata; stored in UTC)</td><td class="k">Distribution</td><td><span class="tlp">TLP:CLEAR</span></td></tr>
+<tr><td class="k">Data mode</td><td><span class="mode sim">DATA MODE: SIMULATED</span> 100% of sessions · filter <code>all</code></td>
+<td class="k">Generated</td><td>2026-10-07 01:45 IST</td></tr>
+<tr><td class="k">Sensor</td><td>Cowrie 3.1.1 (SSH) · ATT&amp;CK v19.2 · 60 rules</td><td class="k">Version</td><td>HoneyLens 1.0.0</td></tr>
+</table>
+
+<div class="note"><b>SIMULATED DATA:</b> 100% of sessions in this window came from the HoneyLens simulator
+(RFC 5737 documentation IPs, <code>.invalid</code> domains). Numbers describe the simulator, not real attackers.</div>
+
+<h2>1. Executive summary</h2>
+<p>The honeypot recorded 552 sessions from 116 source IPs, with 306 fake-successful logins and 2858 commands. The most common behaviour was &#39;intruder&#39; and the most widespread ATT&amp;CK technique was T1082 System Information Discovery.</p>
+<table>
+<tr><th>Metric</th><th class="num">This period</th><th class="num">Previous period</th><th class="num">Change</th></tr>
+<tr><td>Sessions</td><td class="num"><b>552</b></td><td class="num">418</td><td class="num up">+32% vs previous week</td></tr>
+<tr><td>Unique source IPs</td><td class="num"><b>116</b></td><td class="num">112</td><td class="num up">+4% vs previous week</td></tr>
+<tr><td>Login attempts</td><td class="num"><b>1789</b></td><td class="num">1271</td><td class="num up">+41% vs previous week</td></tr>
+<tr><td>Successful (fake) logins</td><td class="num"><b>306</b></td><td class="num">238</td><td class="num up">+29% vs previous week</td></tr>
+<tr><td>Commands run</td><td class="num"><b>2858</b></td><td class="num">2256</td><td class="num up">+27% vs previous week</td></tr>
+<tr><td>Download attempts</td><td class="num"><b>95</b></td><td class="num">89</td><td class="num up">+7% vs previous week</td></tr>
+<tr><td>High/critical sessions</td><td class="num"><b>126</b></td><td class="num">107</td><td class="num up">+18% vs previous week</td></tr>
+<tr><td>ATT&amp;CK techniques</td><td class="num"><b>24</b></td><td class="num">24</td><td class="num ">+0% vs previous week</td></tr>
+</table>
+<p class="muted" style="margin:12px 0 2px;font-size:12px">Sessions per day (IST)</p><svg viewBox="0 0 930 146" width="100%" role="img" aria-label="sessions per day" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#59636e"><line x1="34" x2="930" y1="69.0" y2="69.0" stroke="#e5e9ee"/><text x="28" y="72.0" text-anchor="end">39</text><line x1="34" x2="930" y1="14.0" y2="14.0" stroke="#e5e9ee"/><text x="28" y="17.0" text-anchor="end">78</text><line x1="34" x2="930" y1="124" y2="124" stroke="#8c959f"/><rect x="56.4" y="21.1" width="67.2" height="102.9" fill="#57606a"/><text x="90.0" y="18.1" text-anchor="middle" fill="#1f2328">73</text><text x="90.0" y="138" text-anchor="middle">30 Sep</text><rect x="168.4" y="18.2" width="67.2" height="105.8" fill="#57606a"/><text x="202.0" y="15.2" text-anchor="middle" fill="#1f2328">75</text><text x="202.0" y="138" text-anchor="middle">01 Oct</text><rect x="280.4" y="21.1" width="67.2" height="102.9" fill="#57606a"/><text x="314.0" y="18.1" text-anchor="middle" fill="#1f2328">73</text><text x="314.0" y="138" text-anchor="middle">02 Oct</text><rect x="392.4" y="19.6" width="67.2" height="104.4" fill="#57606a"/><text x="426.0" y="16.6" text-anchor="middle" fill="#1f2328">74</text><text x="426.0" y="138" text-anchor="middle">03 Oct</text><rect x="504.4" y="14.0" width="67.2" height="110.0" fill="#57606a"/><text x="538.0" y="11.0" text-anchor="middle" fill="#1f2328">78</text><text x="538.0" y="138" text-anchor="middle">04 Oct</text><rect x="616.4" y="18.2" width="67.2" height="105.8" fill="#57606a"/><text x="650.0" y="15.2" text-anchor="middle" fill="#1f2328">75</text><text x="650.0" y="138" text-anchor="middle">05 Oct</text><rect x="728.4" y="22.5" width="67.2" height="101.5" fill="#57606a"/><text x="762.0" y="19.5" text-anchor="middle" fill="#1f2328">72</text><text x="762.0" y="138" text-anchor="middle">06 Oct</text><rect x="840.4" y="78.9" width="67.2" height="45.1" fill="#57606a"/><text x="874.0" y="75.9" text-anchor="middle" fill="#1f2328">32</text><text x="874.0" y="138" text-anchor="middle">07 Oct</text></svg>
+<h2>2. Where traffic came from</h2>
+<p class="muted">GeoIP shows where an IP is <i>registered</i>. Attackers relay through hacked servers, clouds and VPNs (Virtual Private Networks), so this is <b>not attribution</b>.</p>
+<div class="two">
+<table><tr><th>Country</th><th class="num">Sessions</th><th class="num">IPs</th></tr>
+<tr><td>Netherlands</td><td class="num">76</td><td class="num">14</td></tr><tr><td>China</td><td class="num">59</td><td class="num">14</td></tr><tr><td>Vietnam</td><td class="num">57</td><td class="num">17</td></tr><tr><td>France</td><td class="num">55</td><td class="num">9</td></tr><tr><td>Russia</td><td class="num">52</td><td class="num">9</td></tr><tr><td>United States</td><td class="num">45</td><td class="num">11</td></tr><tr><td>India</td><td class="num">37</td><td class="num">6</td></tr><tr><td>Indonesia</td><td class="num">36</td><td class="num">7</td></tr><tr><td>Germany</td><td class="num">34</td><td class="num">8</td></tr><tr><td>South Korea</td><td class="num">30</td><td class="num">7</td></tr></table>
+<table><tr><th>Network (ASN)</th><th class="num">Sessions</th><th class="num">IPs</th></tr>
+<tr><td>Unknown</td><td class="num">26</td><td class="num">1</td></tr><tr><td>AS65079 DEMO-NET-65079 (simulated)</td><td class="num">14</td><td class="num">1</td></tr><tr><td>AS64525 DEMO-NET-64525 (simulated)</td><td class="num">12</td><td class="num">2</td></tr><tr><td>AS65229 DEMO-NET-65229 (simulated)</td><td class="num">12</td><td class="num">1</td></tr><tr><td>AS65009 DEMO-NET-65009 (simulated)</td><td class="num">11</td><td class="num">1</td></tr><tr><td>AS65094 DEMO-NET-65094 (simulated)</td><td class="num">11</td><td class="num">2</td></tr><tr><td>AS65415 DEMO-NET-65415 (simulated)</td><td class="num">11</td><td class="num">1</td></tr><tr><td>AS64732 DEMO-NET-64732 (simulated)</td><td class="num">11</td><td class="num">1</td></tr><tr><td>AS65343 DEMO-NET-65343 (simulated)</td><td class="num">11</td><td class="num">1</td></tr><tr><td>AS64562 DEMO-NET-64562 (simulated)</td><td class="num">10</td><td class="num">1</td></tr></table>
+</div>
+<p></p>
+<table><tr><th>Source IP (defanged)</th><th>Country</th><th>Network</th><th class="num">Sessions</th><th class="num">Logins</th><th class="num">Max severity</th></tr>
+<tr><td><code>172[.]19[.]0[.]4</code> <span class="tag sim">sim</span></td><td>Private / reserved</td><td></td>
+<td class="num">26</td><td class="num">70</td><td class="num">95</td></tr><tr><td><code>203[.]0[.]113[.]240</code> <span class="tag sim">sim</span></td><td>India</td><td>DEMO-NET-65079 (simulated)</td>
+<td class="num">14</td><td class="num">27</td><td class="num">46</td></tr><tr><td><code>203[.]0[.]113[.]64</code> <span class="tag sim">sim</span></td><td>Netherlands</td><td>DEMO-NET-65229 (simulated)</td>
+<td class="num">12</td><td class="num">8</td><td class="num">100</td></tr><tr><td><code>192[.]0[.]2[.]68</code> <span class="tag sim">sim</span></td><td>Indonesia</td><td>DEMO-NET-65343 (simulated)</td>
+<td class="num">11</td><td class="num">3</td><td class="num">100</td></tr><tr><td><code>203[.]0[.]113[.]76</code> <span class="tag sim">sim</span></td><td>France</td><td>DEMO-NET-65415 (simulated)</td>
+<td class="num">11</td><td class="num">16</td><td class="num">100</td></tr><tr><td><code>203[.]0[.]113[.]153</code> <span class="tag sim">sim</span></td><td>Russia</td><td>DEMO-NET-65009 (simulated)</td>
+<td class="num">11</td><td class="num">6</td><td class="num">56</td></tr><tr><td><code>203[.]0[.]113[.]139</code> <span class="tag sim">sim</span></td><td>South Korea</td><td>DEMO-NET-64732 (simulated)</td>
+<td class="num">11</td><td class="num">16</td><td class="num">46</td></tr><tr><td><code>203[.]0[.]113[.]225</code> <span class="tag sim">sim</span></td><td>France</td><td>DEMO-NET-65477 (simulated)</td>
+<td class="num">10</td><td class="num">17</td><td class="num">100</td></tr><tr><td><code>203[.]0[.]113[.]118</code> <span class="tag sim">sim</span></td><td>Germany</td><td>DEMO-NET-64695 (simulated)</td>
+<td class="num">10</td><td class="num">40</td><td class="num">100</td></tr><tr><td><code>203[.]0[.]113[.]111</code> <span class="tag sim">sim</span></td><td>Netherlands</td><td>DEMO-NET-65315 (simulated)</td>
+<td class="num">10</td><td class="num">51</td><td class="num">34</td></tr></table>
+
+<h2>3. Credentials and commands</h2>
+<p class="muted">Passwords below were typed by attackers into a fake server. They are not anyone's real credentials.</p>
+<div class="two">
+<table><tr><th>Username</th><th class="num">Attempts</th></tr><tr><td><code>root</code></td><td class="num">719</td></tr><tr><td><code>admin</code></td><td class="num">323</td></tr><tr><td><code>ubuntu</code></td><td class="num">139</td></tr><tr><td><code>user</code></td><td class="num">116</td></tr><tr><td><code>oracle</code></td><td class="num">116</td></tr><tr><td><code>git</code></td><td class="num">116</td></tr><tr><td><code>test</code></td><td class="num">116</td></tr><tr><td><code>postgres</code></td><td class="num">116</td></tr><tr><td><code>pi</code></td><td class="num">28</td></tr></table>
+<table><tr><th>Password</th><th class="num">Attempts</th></tr><tr><td><code>password</code></td><td class="num">232</td></tr><tr><td><code>root</code></td><td class="num">207</td></tr><tr><td><code>toor</code></td><td class="num">116</td></tr><tr><td><code>test</code></td><td class="num">116</td></tr><tr><td><code>postgres</code></td><td class="num">116</td></tr><tr><td><code>oracle</code></td><td class="num">116</td></tr><tr><td><code>user</code></td><td class="num">116</td></tr><tr><td><code>git</code></td><td class="num">116</td></tr><tr><td><code>1234</code></td><td class="num">116</td></tr><tr><td><code>123</code></td><td class="num">116</td></tr></table>
+</div><p></p>
+<table><tr><th>Top commands</th><th class="num">Times</th><th class="num">Sessions</th><th>ATT&amp;CK mapped</th></tr>
+<tr><td><code>ifconfig</code></td><td class="num">91</td><td class="num">91</td><td>yes</td></tr><tr><td><code>ps aux</code></td><td class="num">91</td><td class="num">91</td><td>yes</td></tr><tr><td><code>crontab -l</code></td><td class="num">91</td><td class="num">91</td><td>yes</td></tr><tr><td><code>free -m</code></td><td class="num">91</td><td class="num">91</td><td>yes</td></tr><tr><td><code>lscpu | grep Model</code></td><td class="num">91</td><td class="num">91</td><td>yes</td></tr><tr><td><code>ls -la /tmp</code></td><td class="num">91</td><td class="num">91</td><td>yes</td></tr><tr><td><code>cat /proc/cpuinfo | grep name | wc -l</code></td><td class="num">91</td><td class="num">91</td><td>yes</td></tr><tr><td><code>cat /etc/os-release</code></td><td class="num">91</td><td class="num">91</td><td>yes</td></tr><tr><td><code>echo &#39;probe-ok&#39;</code></td><td class="num">91</td><td class="num">91</td><td>no</td></tr><tr><td><code>uname -a</code></td><td class="num">91</td><td class="num">91</td><td>yes</td></tr></table>
+
+<h2>4. MITRE ATT&amp;CK techniques</h2>
+<p class="muted">ATT&amp;CK = Adversarial Tactics, Techniques, and Common Knowledge (v19.2). Matches come from regex rules on commands; see methodology.</p>
+<div class="two">
+<table><tr><th>Technique</th><th>Tactic</th><th class="num">Sessions</th></tr>
+<tr><td><b>T1082</b> System Information Discovery</td><td>discovery</td><td class="num">136</td></tr><tr><td><b>T1007</b> System Service Discovery</td><td>discovery</td><td class="num">136</td></tr><tr><td><b>T1033</b> System Owner/User Discovery</td><td>discovery</td><td class="num">119</td></tr><tr><td><b>T1059.004</b> Unix Shell</td><td>execution</td><td class="num">102</td></tr><tr><td><b>T1105</b> Ingress Tool Transfer</td><td>command-and-control</td><td class="num">102</td></tr><tr><td><b>T1057</b> Process Discovery</td><td>discovery</td><td class="num">91</td></tr><tr><td><b>T1016</b> System Network Configuration Discovery</td><td>discovery</td><td class="num">91</td></tr><tr><td><b>T1083</b> File and Directory Discovery</td><td>discovery</td><td class="num">91</td></tr><tr><td><b>T1098.004</b> SSH Authorized Keys</td><td>persistence</td><td class="num">62</td></tr><tr><td><b>T1003.008</b> /etc/passwd and /etc/shadow</td><td>credential-access</td><td class="num">62</td></tr><tr><td><b>T1098</b> Account Manipulation</td><td>persistence</td><td class="num">62</td></tr><tr><td><b>T1070.004</b> File Deletion</td><td>stealth</td><td class="num">57</td></tr><tr><td><b>T1496.001</b> Compute Hijacking</td><td>impact</td><td class="num">45</td></tr><tr><td><b>T1036</b> Masquerading</td><td>stealth</td><td class="num">45</td></tr><tr><td><b>T1685</b> Disable or Modify Tools</td><td>defense-impairment</td><td class="num">45</td></tr><tr><td><b>T1564.001</b> Hidden Files and Directories</td><td>stealth</td><td class="num">45</td></tr><tr><td><b>T1053.003</b> Cron</td><td>persistence</td><td class="num">45</td></tr><tr><td><b>T1552.001</b> Credentials In Files</td><td>credential-access</td><td class="num">28</td></tr><tr><td><b>T1070.003</b> Clear Command History</td><td>stealth</td><td class="num">28</td></tr><tr><td><b>T1552.003</b> Shell History</td><td>credential-access</td><td class="num">28</td></tr><tr><td><b>T1685.006</b> Clear Linux or Mac System Logs</td><td>defense-impairment</td><td class="num">28</td></tr><tr><td><b>T1686</b> Disable or Modify System Firewall</td><td>defense-impairment</td><td class="num">28</td></tr><tr><td><b>T1690</b> Prevent Command History Logging</td><td>defense-impairment</td><td class="num">28</td></tr><tr><td><b>T1497.001</b> System Checks</td><td>stealth</td><td class="num">23</td></tr></table>
+<div>
+<table><tr><th>Behaviour class</th><th class="num">Sessions</th><th class="num">Avg severity</th></tr>
+<tr><td>intruder</td><td class="num">181</td><td class="num">42.9</td></tr><tr><td>scanner</td><td class="num">129</td><td class="num">0.0</td></tr><tr><td>brute-forcer</td><td class="num">116</td><td class="num">2.0</td></tr><tr><td>malware-dropper</td><td class="num">57</td><td class="num">54.9</td></tr><tr><td>cryptominer-like</td><td class="num">45</td><td class="num">99.7</td></tr><tr><td>honeypot-prober</td><td class="num">23</td><td class="num">19.2</td></tr><tr><td>unknown</td><td class="num">1</td><td class="num">1.0</td></tr></table><p></p>
+<table><tr><th>Actor (timing heuristic)</th><th class="num">Sessions</th></tr>
+<tr><td>bot</td><td class="num">258</td></tr><tr><td>unknown</td><td class="num">249</td></tr><tr><td>human</td><td class="num">45</td></tr></table>
+</div></div>
+<p><b>Unmapped commands</b> (no rule yet - candidates for new rules):
+<code>echo &#39;probe-ok&#39;</code> (91), <code>chmod -R go= ~/.ssh</code> (62), <code>rm -rf .ssh &amp;&amp; mkdir .ssh</code> (62), <code>enable</code> (57), <code>shell</code> (57), <code>cd /tmp || cd /var/run || cd /dev/shm</code> (57), <code>system</code> (57), <code>sh</code> (57), <code>exit</code> (28), <code>system </code> (4)</p>
+<h2>5. Notable sessions</h2>
+<table><tr><th>When (IST)</th><th>Source</th><th>Class</th><th class="num">Severity</th><th>Summary</th></tr>
+<tr><td>2026-09-30 01:50 IST</td><td><code>203[.]0[.]113[.]64</code> <span class="tag sim">sim</span></td>
+<td>cryptominer-like<br><span class="muted">bot</span></td><td class="num"><span class="sev critical">100 critical</span></td>
+<td>203[.]0[.]113[.]64 (Netherlands), logged in as &#39;root&#39; after 0 failed attempts, ran 8 commands, tried 1 downloads. Techniques: T1007, T1036, T1053.003, T1059.004, T1082, T1105, T1496.001, T1564.001, T1685. Class: cryptominer-like; severity 100 (critical); actor: bot.<br><span class="tag">T1007</span><span class="tag">T1036</span><span class="tag">T1053.003</span><span class="tag">T1059.004</span><span class="tag">T1082</span><span class="tag">T1105</span><span class="tag">T1496.001</span><span class="tag">T1564.001</span><span class="tag">T1685</span></td></tr><tr><td>2026-09-30 05:22 IST</td><td><code>203[.]0[.]113[.]116</code> <span class="tag sim">sim</span></td>
+<td>cryptominer-like<br><span class="muted">bot</span></td><td class="num"><span class="sev critical">100 critical</span></td>
+<td>203[.]0[.]113[.]116 (South Korea), logged in as &#39;root&#39; after 0 failed attempts, ran 8 commands, tried 1 downloads. Techniques: T1007, T1036, T1053.003, T1059.004, T1082, T1105, T1496.001, T1564.001, T1685. Class: cryptominer-like; severity 100 (critical); actor: bot.<br><span class="tag">T1007</span><span class="tag">T1036</span><span class="tag">T1053.003</span><span class="tag">T1059.004</span><span class="tag">T1082</span><span class="tag">T1105</span><span class="tag">T1496.001</span><span class="tag">T1564.001</span><span class="tag">T1685</span></td></tr><tr><td>2026-09-30 09:50 IST</td><td><code>192[.]0[.]2[.]181</code> <span class="tag sim">sim</span></td>
+<td>cryptominer-like<br><span class="muted">bot</span></td><td class="num"><span class="sev critical">100 critical</span></td>
+<td>192[.]0[.]2[.]181 (Germany), logged in as &#39;root&#39; after 0 failed attempts, ran 8 commands, tried 1 downloads. Techniques: T1007, T1036, T1053.003, T1059.004, T1082, T1105, T1496.001, T1564.001, T1685. Class: cryptominer-like; severity 100 (critical); actor: bot.<br><span class="tag">T1007</span><span class="tag">T1036</span><span class="tag">T1053.003</span><span class="tag">T1059.004</span><span class="tag">T1082</span><span class="tag">T1105</span><span class="tag">T1496.001</span><span class="tag">T1564.001</span><span class="tag">T1685</span></td></tr><tr><td>2026-09-30 17:39 IST</td><td><code>203[.]0[.]113[.]130</code> <span class="tag sim">sim</span></td>
+<td>cryptominer-like<br><span class="muted">bot</span></td><td class="num"><span class="sev critical">100 critical</span></td>
+<td>203[.]0[.]113[.]130 (India), logged in as &#39;root&#39; after 0 failed attempts, ran 8 commands, tried 1 downloads. Techniques: T1007, T1036, T1053.003, T1059.004, T1082, T1105, T1496.001, T1564.001, T1685. Class: cryptominer-like; severity 100 (critical); actor: bot.<br><span class="tag">T1007</span><span class="tag">T1036</span><span class="tag">T1053.003</span><span class="tag">T1059.004</span><span class="tag">T1082</span><span class="tag">T1105</span><span class="tag">T1496.001</span><span class="tag">T1564.001</span><span class="tag">T1685</span></td></tr><tr><td>2026-09-30 19:47 IST</td><td><code>192[.]0[.]2[.]62</code> <span class="tag sim">sim</span></td>
+<td>cryptominer-like<br><span class="muted">bot</span></td><td class="num"><span class="sev critical">100 critical</span></td>
+<td>192[.]0[.]2[.]62 (Indonesia), logged in as &#39;root&#39; after 0 failed attempts, ran 8 commands, tried 1 downloads. Techniques: T1007, T1036, T1053.003, T1059.004, T1082, T1105, T1496.001, T1564.001, T1685. Class: cryptominer-like; severity 100 (critical); actor: bot.<br><span class="tag">T1007</span><span class="tag">T1036</span><span class="tag">T1053.003</span><span class="tag">T1059.004</span><span class="tag">T1082</span><span class="tag">T1105</span><span class="tag">T1496.001</span><span class="tag">T1564.001</span><span class="tag">T1685</span></td></tr><tr><td>2026-09-30 20:43 IST</td><td><code>192[.]0[.]2[.]167</code> <span class="tag sim">sim</span></td>
+<td>cryptominer-like<br><span class="muted">bot</span></td><td class="num"><span class="sev critical">100 critical</span></td>
+<td>192[.]0[.]2[.]167 (United States), logged in as &#39;root&#39; after 0 failed attempts, ran 8 commands, tried 1 downloads. Techniques: T1007, T1036, T1053.003, T1059.004, T1082, T1105, T1496.001, T1564.001, T1685. Class: cryptominer-like; severity 100 (critical); actor: bot.<br><span class="tag">T1007</span><span class="tag">T1036</span><span class="tag">T1053.003</span><span class="tag">T1059.004</span><span class="tag">T1082</span><span class="tag">T1105</span><span class="tag">T1496.001</span><span class="tag">T1564.001</span><span class="tag">T1685</span></td></tr><tr><td>2026-10-01 04:26 IST</td><td><code>203[.]0[.]113[.]221</code> <span class="tag sim">sim</span></td>
+<td>cryptominer-like<br><span class="muted">bot</span></td><td class="num"><span class="sev critical">100 critical</span></td>
+<td>203[.]0[.]113[.]221 (China), logged in as &#39;root&#39; after 0 failed attempts, ran 8 commands, tried 1 downloads. Techniques: T1007, T1036, T1053.003, T1059.004, T1082, T1105, T1496.001, T1564.001, T1685. Class: cryptominer-like; severity 100 (critical); actor: bot.<br><span class="tag">T1007</span><span class="tag">T1036</span><span class="tag">T1053.003</span><span class="tag">T1059.004</span><span class="tag">T1082</span><span class="tag">T1105</span><span class="tag">T1496.001</span><span class="tag">T1564.001</span><span class="tag">T1685</span></td></tr><tr><td>2026-10-01 04:40 IST</td><td><code>203[.]0[.]113[.]177</code> <span class="tag sim">sim</span></td>
+<td>cryptominer-like<br><span class="muted">bot</span></td><td class="num"><span class="sev critical">100 critical</span></td>
+<td>203[.]0[.]113[.]177 (Vietnam), logged in as &#39;root&#39; after 0 failed attempts, ran 8 commands, tried 1 downloads. Techniques: T1007, T1036, T1053.003, T1059.004, T1082, T1105, T1496.001, T1564.001, T1685. Class: cryptominer-like; severity 100 (critical); actor: bot.<br><span class="tag">T1007</span><span class="tag">T1036</span><span class="tag">T1053.003</span><span class="tag">T1059.004</span><span class="tag">T1082</span><span class="tag">T1105</span><span class="tag">T1496.001</span><span class="tag">T1564.001</span><span class="tag">T1685</span></td></tr></table>
+
+<h2>6. Indicators of compromise (IOCs)</h2>
+<p class="muted">Defanged so nothing is clickable. Full machine-readable lists: <code>iocs.csv</code>, <code>iocs.stix.json</code>. HoneyLens never downloads these URLs.</p>
+<table><tr><th>Type</th><th>Value</th><th class="num">Count</th><th>First seen (IST)</th></tr>
+<tr><td>URL</td><td><code>hxxp[://]198[.]51[.]100[.]23/bins/x86[.]sh</code></td><td class="num">53</td><td>2026-09-30 06:20 IST</td></tr><tr><td>URL</td><td><code>hxxp[://]payload[.]invalid/miner/kswapd0</code></td><td class="num">42</td><td>2026-09-30 01:50 IST</td></tr><tr><td>SHA-256</td><td><code>e2b2c9a11d9547fecc5e0923f206932166fe4500571f03b5be4ae8d4e691ceeb</code></td><td class="num">3</td><td>2026-10-07 01:42 IST</td></tr><tr><td>SHA-256</td><td><code>01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b</code></td><td class="num">2</td><td>2026-10-07 01:42 IST</td></tr><tr><td>IP</td><td><code>203[.]0[.]113[.]130</code></td><td class="num">7</td><td>2026-09-30 17:39 IST</td></tr><tr><td>IP</td><td><code>192[.]0[.]2[.]242</code></td><td class="num">7</td><td>2026-10-01 09:10 IST</td></tr><tr><td>IP</td><td><code>203[.]0[.]113[.]64</code></td><td class="num">6</td><td>2026-09-30 01:50 IST</td></tr><tr><td>IP</td><td><code>203[.]0[.]113[.]225</code></td><td class="num">5</td><td>2026-10-02 11:19 IST</td></tr><tr><td>IP</td><td><code>203[.]0[.]113[.]221</code></td><td class="num">5</td><td>2026-09-30 07:17 IST</td></tr><tr><td>IP</td><td><code>192[.]0[.]2[.]179</code></td><td class="num">5</td><td>2026-09-30 08:49 IST</td></tr><tr><td>IP</td><td><code>198[.]51[.]100[.]64</code></td><td class="num">4</td><td>2026-09-30 08:03 IST</td></tr><tr><td>IP</td><td><code>203[.]0[.]113[.]87</code></td><td class="num">4</td><td>2026-09-30 14:19 IST</td></tr><tr><td>IP</td><td><code>203[.]0[.]113[.]150</code></td><td class="num">4</td><td>2026-10-01 10:06 IST</td></tr><tr><td>IP</td><td><code>203[.]0[.]113[.]196</code></td><td class="num">4</td><td>2026-10-02 09:19 IST</td></tr><tr><td>IP</td><td><code>192[.]0[.]2[.]167</code></td><td class="num">4</td><td>2026-09-30 20:43 IST</td></tr><tr><td>IP</td><td><code>203[.]0[.]113[.]103</code></td><td class="num">3</td><td>2026-10-03 10:39 IST</td></tr><tr><td>IP</td><td><code>203[.]0[.]113[.]118</code></td><td class="num">3</td><td>2026-10-02 07:07 IST</td></tr><tr><td>IP</td><td><code>203[.]0[.]113[.]177</code></td><td class="num">3</td><td>2026-10-01 04:40 IST</td></tr><tr><td>IP</td><td><code>203[.]0[.]113[.]120</code></td><td class="num">3</td><td>2026-09-30 02:06 IST</td></tr></table>
+
+<h2>7. Defender takeaways</h2>
+<ul class="take"><li>Password guessing is constant (1789 attempts; top usernames: root, admin, ubuntu). Disable SSH password login and use keys (PasswordAuthentication no), or at least fail2ban.</li><li>Attackers wrote their own key into authorized_keys. Monitor ~/.ssh/authorized_keys for changes (file integrity monitoring) and remove unknown keys.</li><li>Cryptominer behaviour seen (stratum URLs, huge pages, killing rival miners). Alert on sustained high CPU and block outbound mining-pool ports such as 3333/4444 at the firewall.</li><li>Attackers try to download tools with wget/curl/tftp right after login. Restrict outbound traffic from servers (egress filtering) so downloads fail.</li><li>Log and history wiping seen. Ship logs off the server in real time so a local wipe cannot erase evidence.</li><li>Persistence via cron/systemd. Review crontabs and new services after any suspected compromise.</li><li>Treat IOCs (Indicators of Compromise) from a honeypot as low-confidence: block-list them for a short time only, because the IPs often belong to hacked third-party machines.</li></ul>
+
+<h2>8. Methodology and limitations</h2>
+<ul>
+<li>Data: Cowrie 3.1.1 SSH honeypot JSON logs, parsed by the HoneyLens pipeline into PostgreSQL. Times stored in UTC, shown in IST.</li>
+<li>ATT&amp;CK mapping: 60 regex rules against Enterprise ATT&amp;CK v19.2. A regex match is evidence, not proof; obfuscated commands can be missed (false negatives) and harmless text can match (false positives).</li>
+<li>Severity (0-100) and classes are transparent heuristics; each session stores the reasons for its score. Bot-vs-human uses command timing and needs at least 3 commands.</li>
+<li>GeoIP/ASN: offline MMDB databases if installed; simulator IPs get deterministic <b>demo</b> values (private-use ASNs 64512+). Registration location is not attacker identity.</li>
+<li>A honeypot only sees attackers who chose to connect to it. It does not measure attacks against other systems.</li>
+<li>Week-over-week compares 7-day windows; small numbers swing a lot in percentage.</li>
+</ul>
+<footer>HoneyLens 1.0.0 · self-contained report (no scripts, no external resources) · do not use for attribution or retaliation.</footer>
+</main></body></html>
