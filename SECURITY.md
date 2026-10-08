@@ -9,7 +9,7 @@ enforced** and **how it is tested**.
 |---|---|---|
 | Only `127.0.0.1:2222` (Cowrie) and `127.0.0.1:3000` (Grafana) are published | `docker-compose.yml` `ports:` | `scripts/check_ports.py` (static + `--live`), `tests/test_compose_safety.py`, integration step 2 |
 | PostgreSQL has no published port; it is on an `internal: true` network | compose `networks.backend.internal` | `check_ports.py` fails if postgres publishes |
-| Cowrie, simulator and Grafana cannot reach the internet in laptop mode; only pipeline has optional API egress | `networks.edge.internal`, `networks.egress`, pipeline network list | static assertion in `tests/test_compose_safety.py`; runtime needs Docker |
+| No container has outbound internet by default. Cowrie/simulator (`edge`) and Grafana (`ui`) are on bridges with IP masquerading off (no outbound NAT); they are not `internal: true` because Docker would then silently skip their published ports. The pipeline gets egress only with the opt-in `docker-compose.enrich.yml` override | `networks.edge` / `networks.ui` `driver_opts`, `docker-compose.enrich.yml` | `tests/test_compose_safety.py` (static); integration step 2b + CI host-port step prove 127.0.0.1:3000 and :2222 really answer |
 | No host networking, privileged mode, or Docker socket mounts | compose review | `check_ports.py` fails on any of them |
 | Containers run non-root, read-only root filesystem, all capabilities dropped, `no-new-privileges` | compose `x-hardening` anchor, `user:`, `read_only:` | integration step 9 (`docker inspect`) |
 | Resource limits (CPU, memory, PIDs) on every service | compose `deploy.resources.limits` | `docker compose config -q` + `tests/test_compose_hardening.py` |
@@ -63,7 +63,8 @@ SETGID) to fix folder ownership before dropping to the `postgres` user; only tho
 ## 6. Reports and ethics
 
 * URLs and IPs are **defanged** in reports (`hxxp[://]198[.]51[.]100[.]7`); `--mask-ips` hides
-  host parts before public sharing.
+  host parts before public sharing: source IPs and every IPv4/IPv6 address inside URLs, commands
+  and session summaries (plain or defanged), in the HTML, CSV and STIX outputs.
 * **No attribution claims, no hack-back.** GeoIP shows where an IP is registered, not who the
   attacker is; the report says so. IOCs are labelled low-confidence.
 
@@ -73,8 +74,10 @@ Dedicated account/compartment/VPC with nothing else in it; only Cowrie (port 22)
 SSH moved to port 22022 (keys only) and reached over Tailscale or a cloud bastion with no public
 ingress rule; a source-IP-restricted public rule is a labelled fallback only (it is not private).
 Grafana is reached through an SSH tunnel. Cowrie egress (to the Internet, other containers and the VM
-itself) is dropped by `deploy/egress-lockdown.sh` and proven with `deploy/verify-egress.sh`, which uses
-only local targets. See DEPLOY_CLOUD.md.
+itself) is dropped by `deploy/egress-lockdown.sh` (IPv4, plus IPv6 when ip6tables is available),
+re-applied before Docker on every boot by `deploy/honeylens-egress-lockdown.service`, and proven with
+`deploy/verify-egress.sh`, which uses only local targets. `cowrie_net` also has IP masquerading off,
+so Cowrie has no outbound NAT even if the firewall rules are missing. See DEPLOY_CLOUD.md.
 
 ## 8. Secret exposure in evidence and the release ZIP
 
