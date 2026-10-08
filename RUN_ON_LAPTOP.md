@@ -45,6 +45,12 @@ python scripts/check_ports.py --live
 ```
 
 It must print `PASS: only allowed ports are published, all on 127.0.0.1`.
+It also fails if Cowrie (2222) or Grafana (3000) has no published port. Quick manual check:
+
+```bash
+curl -s http://127.0.0.1:3000/api/health      # {"database": "ok", ...}
+docker compose port cowrie 2222               # 127.0.0.1:2222
+```
 
 ## 3. Generate SAFE attack data
 
@@ -98,6 +104,10 @@ docker compose restart pipeline
 
 Simulator IPs always use deterministic DEMO data, so this only matters for real attackers.
 
+**Optional IPInfo API.** No container has internet access by default. If you set
+`HL_ENRICH_API_TOKEN` in `.env`, also start with the override that gives ONLY the pipeline outbound
+access: `docker compose -f docker-compose.yml -f docker-compose.enrich.yml up -d`.
+
 ## 8. Run the tests
 
 ```bash
@@ -120,6 +130,7 @@ docker compose down -v           # remove EVERYTHING including the database
 | Symptom | Fix |
 |---|---|
 | `port is already allocated` | another program uses 2222 or 3000: stop it, or change the left side of `ports:` (keep `127.0.0.1:`) |
+| `127.0.0.1:3000` / `:2222` refused but containers are healthy | `docker compose port grafana 3000` must print an address. If it prints nothing, the service is attached only to `internal: true` networks (Docker then skips the port); keep the `ui` / `edge` networks from `docker-compose.yml`. Loopback publishing with masquerading off was checked with Docker's default `userland-proxy`; if you disabled it in `daemon.json` and the port still fails, re-enable it |
 | `migrate` exits non-zero | `docker compose logs migrate` - usually a password under 12 characters in `.env` |
 | Dashboards empty | run step 3, set time range to "Last 7 days", Data = all |
 | `report` cannot write `./out` (Linux) | use the `HL_HOST_UID=$(id -u)` form in step 6 |
