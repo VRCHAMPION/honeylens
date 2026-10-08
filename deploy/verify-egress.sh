@@ -5,7 +5,7 @@
 #   1. creates a throwaway network namespace "hl-egress" joined to the host by a veth pair,
 #      addressed from 198.18.0.0/15 (RFC 2544 benchmarking range, never used on the Internet),
 #      and starts a listener in it. To the host it looks like a router hop away, so
-#      Cowrie -> 198.18.0.2 is FORWARDED and NAT-ed exactly like Internet traffic;
+#      Cowrie -> 198.18.0.2 is FORWARDED exactly like Internet traffic;
 #   2. starts a throwaway listener on the host at the Cowrie bridge gateway (172.31.250.1),
 #      which covers traffic from Cowrie to the VM itself (INPUT chain);
 #   3. from inside the Cowrie container, tries to open a TCP connection to both;
