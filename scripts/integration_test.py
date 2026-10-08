@@ -208,8 +208,17 @@ def main() -> int:
     record("9c pipeline runs as uid 10001", "uid=10001" in pipe_user, pipe_user)
 
     # 10. Grafana + report
-    grafana = subprocess.run([sys.executable, "scripts/check_grafana.py"], cwd=ROOT,
-                             capture_output=True, text=True, timeout=900)  # noqa: S603,S607  # nosec B603 B607
+    check_uid = f"{os.getuid()}:{os.getgid()}" if hasattr(os, "getuid") else "0:0"
+    grafana_cmd = [
+        "docker", "run", "--rm", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m",
+        "--network", "honeylens_backend", "--user", check_uid, "--cap-drop=ALL",
+        "--security-opt=no-new-privileges", "--pids-limit=32",
+        "--mount", f"type=bind,source={ROOT / 'scripts'},target=/app/scripts,readonly",
+        "--mount", f"type=bind,source={ROOT / '.env'},target=/app/.env,readonly",
+        "honeylens:1.0.0", "python", "/app/scripts/check_grafana.py", "--url", "http://grafana:3000",
+    ]
+    grafana = subprocess.run(grafana_cmd, cwd=ROOT, capture_output=True, text=True,
+                             timeout=900)  # noqa: S603,S607  # nosec B603 B607
     grafana_output = (grafana.stdout + grafana.stderr).splitlines()
     grafana_output = [line for line in grafana_output if line.strip()]
     grafana_summary = grafana_output[-1] if grafana_output else f"no output (exit {grafana.returncode})"
