@@ -104,3 +104,24 @@ def test_cli_refuses_placeholder_password(monkeypatch, tmp_path):
     with pytest.raises(SystemExit) as e:
         main(["--out", str(tmp_path)])
     assert e.value.code == 2
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("true", True), ("1", True), ("YES", True), ("on", True),
+                                               ("false", False), ("0", False), ("", False)])
+def test_mask_ips_env_accepts_common_true_values(monkeypatch, tmp_path, raw, expected):
+    import honeylens.reporting.scheduler as sched_mod
+
+    seen = {}
+
+    class FakeScheduler:
+        def __init__(self, *args, extra_args=None, **kw):
+            seen["extra"] = extra_args
+
+        def run_once(self, now):
+            return 0
+
+    monkeypatch.setattr(sched_mod, "Scheduler", FakeScheduler)
+    monkeypatch.setenv("HL_DB_PASSWORD", "Zq8vN3kLp2Xw7RtY4mBs9Cd1")
+    monkeypatch.setenv("HL_REPORT_MASK_IPS", raw)
+    assert sched_mod.main(["--out", str(tmp_path), "--run-now"]) == 0
+    assert (seen["extra"] == ["--mask-ips"]) is expected
