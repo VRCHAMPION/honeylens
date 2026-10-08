@@ -109,13 +109,21 @@ class Board:
             "(never real attackers). Filter with <b>Data</b> = all / real / simulated. "
             "Times in IST (Asia/Kolkata); stored in UTC.</div>"), 18, 2)
 
+    def uses_data_filter(self) -> bool:
+        """True when any panel query references the $data variable."""
+        return any("${data" in t.get("rawSql", "") or "$data" in t.get("rawSql", "")
+                   for p in self.panels for t in p.get("targets", []))
+
     def to_json(self) -> dict:
-        variables = [{
+        # The "Data" dropdown is only added where a query uses it (dashboard 05 is
+        # about the pipeline itself and has no simulated/real split).
+        data_var = [{
             "name": "data", "label": "Data", "type": "custom", "query": "all,real,simulated",
             "current": {"text": "all", "value": "all"}, "options": [
                 {"text": v, "value": v, "selected": v == "all"} for v in ("all", "real", "simulated")],
             "description": "all = everything; real = internet attackers only; simulated = HoneyLens simulator only",
-        }] + self.extra_vars
+        }] if self.uses_data_filter() else []
+        variables = data_var + self.extra_vars
         return {
             "uid": self.uid, "title": self.title, "description": self.description, "tags": ["honeylens"],
             "timezone": "Asia/Kolkata", "editable": False, "graphTooltip": 1, "schemaVersion": 41,

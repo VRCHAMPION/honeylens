@@ -18,8 +18,9 @@ A value is rejected when it is:
 * low-variety (fewer than 6 distinct characters, e.g. ``aaaaaaaaaaaaaaaa`` or
   ``123412341234``).
 
-``scripts/make_env.py`` generates 24-character random values with
-``secrets.token_urlsafe`` which always pass.
+``scripts/make_env.py`` generates 32-character random hex values with
+``secrets.token_hex`` which always pass (hex digits cannot spell any of the
+placeholder words; a URL-safe token occasionally did, e.g. "...xXXX...").
 """
 
 from __future__ import annotations

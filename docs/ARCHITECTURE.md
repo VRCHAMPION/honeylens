@@ -154,7 +154,7 @@ flowchart TB
 | Choice | Benefit | Cost |
 |---|---|---|
 | Tail files instead of Cowrie's PostgreSQL output plugin | Cowrie never gets DB credentials; we control sanitising and replay | must handle rotation/offsets ourselves (tested) |
-| Batches of 500 in one transaction | fast, all-or-nothing | a poison batch is retried (malformed lines are filtered before the DB so this is rare) |
+| Batches of 500 in one transaction | fast, all-or-nothing | a row PostgreSQL rejects fails the batch; the batch is then replayed line by line in savepoints and only that line is skipped (counted as malformed), so it can never stall ingestion |
 | Recount session totals from child tables | always correct even after replays/out-of-order lines | a few more queries per batch |
 | Regex rules instead of ML (Machine Learning) | explainable, testable, no training data | misses obfuscated commands; needs rule upkeep |
 | Offline MMDB GeoIP | private and free | location ≠ attacker identity; monthly refresh |

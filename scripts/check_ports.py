@@ -17,7 +17,8 @@ logged; only service names and ports are printed. Plain validation uses
 
 ``--live`` additionally inspects RUNNING containers with ``docker ps`` so the
 real bindings are checked too, and FAILS if Cowrie (2222) or Grafana (3000) has
-no published port at all.
+no published port at all. With ``--cloud`` the only public binding accepted is
+host port 22 -> Cowrie 2222 (IPv4 and IPv6); any other public port fails.
 
 Usage:  python scripts/check_ports.py [--live] [-f docker-compose.yml]
 Exit code 0 = safe, 1 = problem found.
@@ -34,6 +35,8 @@ from pathlib import Path
 ALLOWED = {("cowrie", 2222), ("grafana", 3000)}
 # Services whose port must really be published when the stack runs (--live).
 EXPECTED_LIVE = {"cowrie": 2222, "grafana": 3000}
+# In cloud mode the ONLY public bindings allowed are host port 22 -> Cowrie 2222.
+CLOUD_PUBLIC_COWRIE = {"0.0.0.0:22->2222/tcp", "[::]:22->2222/tcp", ":::22->2222/tcp"}
 
 
 def compose_config(files: list[str], env_file: str | None) -> dict:
@@ -90,8 +93,12 @@ def check_live(cloud: bool = False) -> list[str]:
         for mapping in filter(None, (p.strip() for p in ports.split(","))):
             if "->" in mapping:
                 published.add(f"{name}|{mapping.split('->', 1)[1]}")
-            if "->" in mapping and not mapping.startswith("127.0.0.1:") and not (cloud and "-cowrie-" in name):
-                problems.append(f"LIVE {name}: {mapping} is not bound to 127.0.0.1")
+            if "->" not in mapping or mapping.startswith("127.0.0.1:"):
+                continue
+            if cloud and "-cowrie-" in name and mapping in CLOUD_PUBLIC_COWRIE:
+                continue
+            problems.append(f"LIVE {name}: {mapping} is not bound to 127.0.0.1"
+                            + (" (cloud mode allows only 0.0.0.0:22->2222/tcp for Cowrie)" if cloud else ""))
         print(f"live  {name:28} {ports or '(no published ports)'}")
     for svc, port in EXPECTED_LIVE.items():
         if not any(f"-{svc}-" in p.split("|")[0] and p.split("|")[1].startswith(f"{port}/") for p in published):

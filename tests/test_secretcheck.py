@@ -44,17 +44,17 @@ def test_obvious_placeholders_fail(value):
 
 
 def test_generated_secrets_pass(monkeypatch):
-    for _ in range(500):  # same generator as scripts/make_env.py
-        v = secrets.token_urlsafe(18)
+    for _ in range(2000):  # same generator as scripts/make_env.py (hex: never spells a placeholder word)
+        v = secrets.token_hex(16)
         assert problem(v) is None, v
-    good = secrets.token_urlsafe(18)
+    good = secrets.token_hex(16)
     monkeypatch.setenv("HL_DB_PASSWORD", good)
     assert require_secret("HL_DB_PASSWORD") == good
 
 
 def test_require_all_reports_every_bad_name_without_values(monkeypatch, capsys):
     for n in SECRET_ENV_NAMES:
-        monkeypatch.setenv(n, secrets.token_urlsafe(18))
+        monkeypatch.setenv(n, secrets.token_hex(16))
     require_all()
     monkeypatch.setenv("GF_ADMIN_PASSWORD", "change-me-grafana-admin")
     monkeypatch.delenv("HL_REPORT_DB_PASSWORD")
@@ -92,9 +92,17 @@ def test_programs_refuse_placeholder(entry, monkeypatch):
 def test_migrate_refuses_placeholder(monkeypatch):
     from honeylens import migrate
     for n in SECRET_ENV_NAMES:
-        monkeypatch.setenv(n, secrets.token_urlsafe(18))
+        monkeypatch.setenv(n, secrets.token_hex(16))
     monkeypatch.setenv("POSTGRES_PASSWORD", "change-me-admin-password")
     monkeypatch.setenv("HL_DB_HOST", "192.0.2.1")
     with pytest.raises(SystemExit) as e:
         migrate.main()
     assert e.value.code == 2
+
+
+def test_urlsafe_token_can_look_like_placeholder_so_generator_uses_hex():
+    """Regression: CI once generated a token_urlsafe value containing "xXXX" and the check failed."""
+    looks_random = "yebtlYJLaCyLUYd" + "xXXX" + "-YePU"
+    assert problem(looks_random) == "looks like a placeholder"
+    text = (ROOT / "scripts" / "make_env.py").read_text()
+    assert "token_hex(" in text and "token_urlsafe(" not in text.replace("``token_urlsafe``", "")

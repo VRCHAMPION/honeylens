@@ -74,3 +74,35 @@ def test_mask_ips_in_text_ipv6():
 def test_mask_ips_in_text_leaves_non_ips_alone():
     for text in ("echo 12:30:45", "std::cout", "version 1.2.3", "10.0.0.256", "", "uname -a"):
         assert mask_ips_in_text(text) == text
+
+
+def test_lone_surrogates_are_stripped_and_text_encodes():
+    out = clean_text("echo \ud800 x\udcff y \U0001f600")
+    assert out == "echo  x y \U0001f600"
+    out.encode("utf-8")  # would raise UnicodeEncodeError with a lone surrogate left in
+
+
+def test_unicode_line_separators_become_marker():
+    assert clean_text("a\u2028b\u2029c") == "a ⏎ b ⏎ c"
+
+
+def test_mask_ips_leading_zero_octets():
+    assert mask_ips_in_text("curl 198.051.100.023/x") == "curl 198.051.100.x/x"
+    assert mask_ips_in_text("010.000.000.001") == "010.000.000.x"
+
+
+def test_mask_ips_numeric_and_hex_url_hosts():
+    assert mask_ips_in_text("wget http://3325256727/x") == "wget http://x.x.x.x/x"
+    assert mask_ips_in_text("wget http://0xC6336417/x") == "wget http://x.x.x.x/x"
+    assert mask_ips_in_text("curl https://u:p@0xc6.0x33.100.23:8080/a") == "curl https://u:p@x.x.x.x:8080/a"
+    assert mask_ips_in_text("http://3325256727") == "http://x.x.x.x"
+    # ordinary host names and ports are untouched
+    assert mask_ips_in_text("http://example.com:8080/a") == "http://example.com:8080/a"
+    assert mask_ips_in_text("http://198.51.100.23:80/") == "http://198.51.100.x:80/"
+
+
+def test_mask_ips_ipv4_embedded_ipv6_fully_masked():
+    out = mask_ips_in_text("ping 2001:db8::1.2.3.4 now")
+    assert out == "ping 2001:db8::/48(masked) now"
+    assert "1.2.3" not in out
+    assert mask_ip("::ffff:203.0.113.9") == "::ffff:203.0.113.x"

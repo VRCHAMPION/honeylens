@@ -7,6 +7,11 @@ Behaviour:
   round trips to PostgreSQL = much faster),
 * if PostgreSQL is down it waits with exponential back-off (1s, 2s, 4s ...
   max 30s) and retries the SAME lines - nothing is lost or duplicated,
+* if ONE line makes the batch fail for a data reason (a value PostgreSQL
+  rejects, or a bug in our own code for that event) the batch is replayed
+  line by line inside savepoints; the bad line is skipped, counted as
+  malformed ("quarantined" in the logs) and the offsets still move forward,
+  so a single poison line can never stall ingestion,
 * on SIGTERM/SIGINT (``docker compose stop`` / Ctrl+C) it finishes the current
   batch, commits, and exits cleanly,
 * writes a metrics row to ``pipeline_stats`` after each batch (and a heartbeat
@@ -33,7 +38,7 @@ from honeylens.enrich.geo import build_enricher
 from honeylens.logutil import setup_logging
 from honeylens.mitre.attack import default_rules
 from honeylens.pipeline.events import BadEvent, parse_line
-from honeylens.pipeline.store import load_offsets, recompute_all, write_batch
+from honeylens.pipeline.store import BatchStats, load_offsets, recompute_all, save_offsets, write_batch
 from honeylens.pipeline.tailer import Tailer
 from honeylens.secretcheck import require_secret
 
@@ -52,6 +57,7 @@ class Totals:
     malformed: int = 0
     oversized: int = 0
     ignored: int = 0
+    quarantined: int = 0
     db_errors: int = 0
     batches: int = 0
 
@@ -112,6 +118,10 @@ class Pipeline:
             except BadEvent:
                 malformed += 1
                 continue
+            except Exception as exc:  # noqa: BLE001 - a parser bug must not stall ingestion
+                malformed += 1
+                log.warning("quarantined line", extra={"file": os.path.basename(line.path), "error": type(exc).__name__})
+                continue
             if self.settings.ignore_loopback and ev.src_ip and ipaddress.ip_address(ev.src_ip).is_loopback:
                 ignored += 1  # Docker healthcheck probes, not attackers
                 continue
@@ -119,8 +129,10 @@ class Pipeline:
             source[ev.event_uid] = line.path
         pending = self.tailer.pending_offsets(result)
         stats = None
+        quarantined = 0
         if result.lines or result.skipped_to or pending:
-            stats = write_batch(self.conn, events, self.enricher, pending, source)
+            stats, quarantined = self._store(events, pending, source)
+            malformed += quarantined
         now = time.time()
         batch_ms = (time.monotonic() - started) * 1000
         if stats is not None or now - self._last_stats >= HEARTBEAT_S:
@@ -142,14 +154,67 @@ class Pipeline:
             self.totals.malformed += malformed
             self.totals.oversized += result.oversized
             self.totals.ignored += ignored
+            self.totals.quarantined += quarantined
             log.info("batch", extra={"lines": len(result.lines), "inserted": stats.inserted,
                                      "duplicates": stats.duplicates, "malformed": malformed,
+                                     "quarantined": quarantined,
                                      "oversized": result.oversized, "ignored": ignored, "sessions": stats.sessions_updated,
                                      "batch_ms": round(batch_ms, 1)})
         if now - self._last_retention >= RETENTION_EVERY_S:
             self._retention()
             self._last_retention = now
         return len(result.lines) + len(result.skipped_to)
+
+    def _store(self, events: list[Any], pending: dict[str, Any], source: dict[str, str]) -> tuple[BatchStats, int]:
+        """Write the batch; on a per-row failure replay it line by line and skip the bad lines.
+
+        Everything happens inside the caller's transaction, so events and
+        offsets are still committed together (effectively-once). Connection
+        problems and server-side trouble (disk full, shutdown) are re-raised
+        so the main loop backs off and retries the same lines.
+        """
+        conn = self.conn
+        conn.execute("SAVEPOINT hl_batch")
+        try:
+            stats = write_batch(conn, events, self.enricher, pending, source)
+        except Exception as exc:
+            if not self._is_poison(exc):
+                raise
+            conn.execute("ROLLBACK TO SAVEPOINT hl_batch")
+            log.warning("batch failed on a data error, retrying line by line", extra={"error": type(exc).__name__})
+        else:
+            conn.execute("RELEASE SAVEPOINT hl_batch")
+            return stats, 0
+        stats, bad = BatchStats(), 0
+        for ev in events:
+            conn.execute("SAVEPOINT hl_line")
+            try:
+                one = write_batch(conn, [ev], self.enricher, {}, source)
+            except Exception as exc:
+                if not self._is_poison(exc):
+                    raise
+                conn.execute("ROLLBACK TO SAVEPOINT hl_line")
+                bad += 1
+                # Only safe metadata: never the attacker-controlled content.
+                log.warning("quarantined event", extra={"event_uid": ev.event_uid, "eventid": ev.eventid,
+                                                        "file": os.path.basename(source.get(ev.event_uid, "")),
+                                                        "error": type(exc).__name__})
+                continue
+            conn.execute("RELEASE SAVEPOINT hl_line")
+            stats.inserted += one.inserted
+            stats.duplicates += one.duplicates
+            stats.sessions_updated += one.sessions_updated
+        save_offsets(conn, pending)
+        conn.execute("RELEASE SAVEPOINT hl_batch")
+        return stats, bad
+
+    def _is_poison(self, exc: Exception) -> bool:
+        """True when ``exc`` is about the data of a row, not about the database or connection."""
+        if self.conn is None or self.conn.closed or self.conn.broken:
+            return False
+        if isinstance(exc, psycopg.Error):
+            return isinstance(exc, psycopg.DataError | psycopg.IntegrityError | psycopg.errors.ProgramLimitExceeded)
+        return True  # a bug in our own Python code for this event (ValueError, KeyError, ...)
 
     def _retention(self) -> None:
         if self.settings.retention_days <= 0:

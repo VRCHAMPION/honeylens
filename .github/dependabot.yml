@@ -1,6 +1,16 @@
 # Dependabot: weekly update PRs for every pinned dependency.
 # Actions are pinned by commit SHA and images by tag/digest, so without this
 # nothing would ever tell us about a security fix upstream.
+#
+# Big jumps are ignored on purpose (patch updates still arrive):
+#   * Python base image minor/major (3.12 -> 3.14): CI tests the versions in
+#     the pytest matrix (.github/workflows/ci.yml); a new runtime minor needs a
+#     matrix change first, and tests/test_versions.py enforces that.
+#   * Grafana and PostgreSQL major versions: a Grafana major can break the
+#     provisioned dashboards, a PostgreSQL major needs a data-directory upgrade
+#     (pg_upgrade or dump/restore). Do those by hand.
+# The Cowrie version is also quoted in src/honeylens/versions.py; a Cowrie bump
+# fails tests/test_versions.py until that constant is updated in the same PR.
 version: 2
 updates:
   - package-ecosystem: pip            # pyproject.toml (exact pins)
@@ -21,8 +31,16 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: docker-compose # postgres / cowrie / grafana image tags
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "grafana/grafana"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]

@@ -1,4 +1,10 @@
-# Continuous Integration (CI): runs on every push / pull request on GitHub.
+# Continuous Integration (CI): runs on pushes to main and on every pull request.
+# (Not on every branch push as well: a same-repo PR would otherwise run twice.)
+#
+# Versions: image tags live ONLY in docker-compose.yml. The PostgreSQL service
+# below and the Trivy scan read them from `docker compose config --images`,
+# and tests/test_versions.py checks every remaining copy (Dockerfile Python vs
+# the test matrix, Cowrie version quoted in the report).
 #
 # Supply-chain choices:
 #   * GitHub actions are pinned to full commit SHAs (a tag can be moved).
@@ -8,6 +14,7 @@
 name: ci
 on:
   push:
+    branches: [main]
   pull_request:
 permissions:
   contents: read
@@ -25,12 +32,34 @@ env:
   GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.0@sha256:691af3c7c5a48b16f187ce3446d5f194838f91238f27270ed36eef6359a574d9
 
 jobs:
+  images:
+    name: image versions from docker-compose.yml
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      postgres: ${{ steps.read.outputs.postgres }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: read the pinned PostgreSQL image
+        id: read
+        run: |
+          set -eu
+          python3 scripts/make_env.py   # compose needs the variables; throwaway values
+          pg="$(docker compose config --images | grep -E '^postgres:' | head -n 1)"
+          test -n "$pg"
+          echo "postgres image: $pg"
+          echo "postgres=$pg" >> "$GITHUB_OUTPUT"
+
   lint:
     name: lint + static security checks
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
@@ -47,12 +76,18 @@ jobs:
         run: docker run --rm -i "$HADOLINT_IMAGE" < Dockerfile
 
   test:
-    name: pytest + coverage
+    name: pytest + coverage (Python ${{ matrix.python }})
+    needs: images
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 = requires-python floor; 3.12 = the Docker runtime image.
+        python: ["3.11", "3.12"]
     services:
       postgres:
-        image: postgres:18.6-trixie
+        image: ${{ needs.images.outputs.postgres }}
         env:
           POSTGRES_USER: hl_admin
           POSTGRES_PASSWORD: ci-only-throwaway-db # throwaway CI database, not a real secret  # gitleaks:allow
@@ -63,9 +98,11 @@ jobs:
       HL_TEST_PG: "host=127.0.0.1 port=5432 user=hl_admin password=ci-only-throwaway-db" # gitleaks:allow
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - run: pip install -e ".[dev]"
       - name: pytest with coverage (includes DB migration + stix2 validation tests)
         run: pytest --cov=honeylens --cov-report=term --cov-fail-under=80
@@ -80,6 +117,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: create .env with random secrets (never committed)
         run: python3 scripts/make_env.py
       - name: Docker Compose config validation (laptop + cloud + opt-in enrichment egress)
@@ -96,14 +135,19 @@ jobs:
         run: docker compose pull postgres cowrie grafana
       - name: Trivy - report every HIGH/CRITICAL (does not fail the build)
         run: |
-          for img in honeylens:1.0.0 cowrie/cowrie:3.1.1 postgres:18.6-trixie grafana/grafana:12.4.12; do
+          # Every image the stack really runs, as resolved by Compose (no hard-coded tags).
+          images="$(docker compose --profile sim --profile tools config --images | sort -u)"
+          echo "$images"
+          for img in $images; do
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
               image --scanners vuln --severity HIGH,CRITICAL --format table "$img"
           done
       - name: Trivy - FAIL on a CRITICAL that already has a fix in OUR image
         run: |
+          ours="$(docker compose config --images | grep -E '^honeylens:' | head -n 1)"
+          test -n "$ours"
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
-            image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 honeylens:1.0.0
+            image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 "$ours"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
@@ -138,6 +182,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Verify Gitleaks detects a generated test token
         run: |
           set -eu
