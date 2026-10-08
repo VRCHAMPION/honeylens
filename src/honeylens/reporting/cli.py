@@ -28,7 +28,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--days", type=int, default=7, help="window length in days (default 7)")
     parser.add_argument("--end", help="window end, ISO time (default: now)")
     parser.add_argument("--data", choices=sorted(FILTERS), default="all", help="all, real or simulated sessions")
-    parser.add_argument("--mask-ips", action="store_true", help="mask the last part of every IP (for public sharing)")
+    parser.add_argument("--mask-ips", action="store_true",
+                        help="mask the last part of every IP, including IPs inside URLs, commands and summaries (for public sharing)")
     parser.add_argument("--top", type=int, default=10)
     args = parser.parse_args(argv)
     setup_logging()
