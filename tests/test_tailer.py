@@ -100,3 +100,43 @@ def test_rename_is_reported_for_saving(tmp_path):
     assert any(s.path.endswith(".2026-10-01") for s in pending.values())
     t.commit(res)
     assert t.pending_offsets(t.read(10)) == {}
+
+
+def test_oversized_line_still_being_written_is_skipped_across_polls(tmp_path):
+    p = tmp_path / "cowrie.json"
+    p.write_bytes(b"ok1\n" + b"Z" * 5000)  # giant line, no newline yet
+    t = Tailer([str(p)], max_line_bytes=1000)
+    lines, res = read_all(t)
+    assert lines == [b"ok1"] and res.oversized == 1
+    with open(p, "ab") as fh:
+        fh.write(b"Z" * 3000 + b"\nok2\n")  # the rest of the giant line arrives
+    lines, res = read_all(t)
+    assert lines == [b"ok2"], "tail of the oversized line must not come back as a new line"
+    assert res.oversized == 0  # counted once, in the first poll
+    assert t.lag_bytes() == 0
+
+
+def test_oversized_mid_line_offset_detected_after_restart(tmp_path):
+    p = tmp_path / "cowrie.json"
+    p.write_bytes(b"ok1\n" + b"Z" * 5000)
+    t = Tailer([str(p)], max_line_bytes=1000)
+    read_all(t)
+    saved = [(s.key, s.path, s.offset, s.head_hash) for s in t.states.values()]
+    with open(p, "ab") as fh:
+        fh.write(b"Z" * 300 + b"\nok2\n")
+    t2 = Tailer([str(p)], max_line_bytes=1000)
+    t2.load_offsets(saved)
+    lines, res = read_all(t2)
+    assert lines == [b"ok2"] and res.oversized == 0
+
+
+def test_skipping_flag_not_applied_without_commit(tmp_path):
+    p = tmp_path / "cowrie.json"
+    p.write_bytes(b"Z" * 5000)
+    t = Tailer([str(p)], max_line_bytes=1000)
+    res = t.read(10)  # DB failure: no commit
+    assert res.oversized == 1
+    with open(p, "ab") as fh:
+        fh.write(b"\nok\n")
+    lines, res = read_all(t)
+    assert lines == [b"ok"] and res.oversized == 1
