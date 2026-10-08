@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 {# Content-Security-Policy: nothing external, no scripts at all. The report is fully self-contained. #}
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
 <title>HoneyLens weekly report · {{ w_start }} to {{ w_end }}</title>
 <style>
 /* Analyst-report style: print-friendly, neutral greys, colour only for severity/data mode. */
@@ -85,8 +85,8 @@ ul.take li{margin:4px 0}footer{margin-top:36px;padding-top:8px;border-top:1px so
 <h2>3. Credentials and commands</h2>
 <p class="muted">Passwords below were typed by attackers into a fake server. They are not anyone's real credentials.</p>
 <div class="two">
-<table><tr><th>Username</th><th class="num">Attempts</th></tr>{% for r in d.usernames %}<tr><td><code>{{ r.username }}</code></td><td class="num">{{ r.attempts }}</td></tr>{% endfor %}</table>
-<table><tr><th>Password</th><th class="num">Attempts</th></tr>{% for r in d.passwords %}<tr><td><code>{{ r.password }}</code></td><td class="num">{{ r.attempts }}</td></tr>{% endfor %}</table>
+<table><tr><th>Username</th><th class="num">Attempts</th></tr>{% for r in d.usernames %}<tr><td><code>{{ cred(r.username) }}</code></td><td class="num">{{ r.attempts }}</td></tr>{% endfor %}</table>
+<table><tr><th>Password</th><th class="num">Attempts</th></tr>{% for r in d.passwords %}<tr><td><code>{{ cred(r.password) }}</code></td><td class="num">{{ r.attempts }}</td></tr>{% endfor %}</table>
 </div><p></p>
 <table><tr><th>Top commands</th><th class="num">Times</th><th class="num">Sessions</th><th>ATT&amp;CK mapped</th></tr>
 {% for r in d.commands %}<tr><td><code>{{ defang(r.command) }}</code></td><td class="num">{{ r.times }}</td><td class="num">{{ r.sessions }}</td><td>{{ 'yes' if r.mapped else 'no' }}</td></tr>{% endfor %}</table>
