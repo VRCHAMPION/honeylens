@@ -12,9 +12,11 @@ nothing is lost, because the pipeline resumes from saved offsets.
 
 ```mermaid
 flowchart TD
-    subgraph edge["Docker network: edge (internal; no outbound route)"]
+    subgraph edge["Docker network: edge (bridge, masquerade off: no outbound NAT)"]
       SIM["simulator (profile: sim)<br/>live SSH sessions"]
       COW["cowrie 3.1.1<br/>uid 999, read-only rootfs<br/>127.0.0.1:2222 -> 2222"]
+    end
+    subgraph ui["Docker network: ui (bridge, masquerade off)"]
       GRA["grafana 12.4.12<br/>uid 472, read-only rootfs<br/>127.0.0.1:3000"]
     end
     subgraph backend["Docker network: backend (internal database network)"]
@@ -24,7 +26,7 @@ flowchart TD
       REP["report (profile: tools)"]
       GRA
     end
-    EGRESS["egress network<br/>only pipeline can join"]
+    EGRESS["egress network (opt-in override<br/>docker-compose.enrich.yml), pipeline only"]
     SYN["synthetic (profile: sim)<br/>network_mode: none"]
     SIM -->|SSH| COW
     COW -->|writes cowrie.json| VOL[(volume cowrie_var)]
@@ -165,6 +167,10 @@ crash-safe offsets stored in the same Postgres transaction as the data, deduplic
 each line, enriches IPs offline, maps commands to ATT&CK with validated regex rules, scores each
 session with explainable points, and Grafana plus an HTML report read it through read-only roles.
 Everything runs in hardened containers and only loopback ports are exposed on a laptop.
-In the laptop Compose stack, Cowrie, the live simulator and Grafana share an internal edge network.
-The pipeline alone also joins a normal egress network so the opt-in IPInfo provider can work; the
-pipeline does not share a network with Cowrie and reads its log volume read-only.
+In the laptop Compose stack, Cowrie and the live simulator share the `edge` network and Grafana has
+its own `ui` network (plus the internal `backend` network for read-only DB access). `edge` and `ui`
+are ordinary bridges, because Docker does not publish ports for a container attached only to
+`internal: true` networks, but both have IP masquerading switched off, so there is no outbound NAT
+and no working route to the internet. No container has internet access by default. Only with the
+opt-in `docker-compose.enrich.yml` override does the pipeline join a normal `egress` network for the
+IPInfo provider. The pipeline never shares a network with Cowrie and reads its log volume read-only.
