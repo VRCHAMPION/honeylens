@@ -210,7 +210,7 @@ def main() -> int:
     # 10. Grafana + report
     check_uid = f"{os.getuid()}:{os.getgid()}" if hasattr(os, "getuid") else "0:0"
     grafana_cmd = [
-        "docker", "run", "--rm", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m",  # noqa: S108
+        "docker", "run", "--rm", "--read-only",
         "--network", "honeylens_backend", "--user", check_uid, "--cap-drop=ALL",
         "--security-opt=no-new-privileges", "--pids-limit=32",
         "--mount", f"type=bind,source={ROOT / 'scripts'},target=/app/scripts,readonly",
