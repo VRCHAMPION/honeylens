@@ -52,7 +52,7 @@
           "type": "grafana-postgresql-datasource",
           "uid": "honeylens-pg"
         },
-        "query": "SELECT session_id FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) ORDER BY severity DESC NULLS LAST, start_ts DESC LIMIT 300",
+        "query": "SELECT session_id FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) ORDER BY severity DESC NULLS LAST, start_ts DESC LIMIT 300",
         "refresh": 2,
         "includeAll": false,
         "sort": 0,
@@ -186,7 +186,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT start_ts AS \"Start (IST)\", session_id AS \"Session\", host(src_ip) AS \"IP\", country AS \"Country\", classification AS \"Class\", severity AS \"Severity\", actor_type AS \"Actor\", login_attempts AS \"Logins\", commands_count AS \"Cmds\", is_simulated AS \"Sim\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND ('${data}' = 'all' OR is_simulated = ('${data}' = 'simulated')) ORDER BY severity DESC NULLS LAST, start_ts DESC LIMIT 200"
+          "rawSql": "SELECT start_ts AS \"Start (IST)\", session_id AS \"Session\", host(src_ip) AS \"IP\", country AS \"Country\", classification AS \"Class\", severity AS \"Severity\", actor_type AS \"Actor\", login_attempts AS \"Logins\", commands_count AS \"Cmds\", is_simulated AS \"Sim\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) ORDER BY severity DESC NULLS LAST, start_ts DESC LIMIT 200"
         }
       ],
       "fieldConfig": {
