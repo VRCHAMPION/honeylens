@@ -282,11 +282,13 @@ rotation, hostile lines, roles, Grafana, reports, scheduler, and fail-closed sec
 running `docker compose down -v` unless `--keep` is used, so it can delete local Docker volumes.
 
 The GitHub workflow pins actions to commit SHAs and scanner images to digests, uses read-only
-workflow permissions, and defines separate lint, test, Compose/integration/image-scan, and Gitleaks
-jobs. The release commit's hosted run
-([37808655086](https://github.com/VRCHAMPION/honeylens/actions/runs/37808655086)) passed all four:
-the PostgreSQL-backed test job ran 373 tests with 85.69% line + branch coverage (gate: 80%), and
-the Docker job ran the full integration script. Without `HL_TEST_PG` or Docker, the database and
+workflow permissions, and defines separate lint, test (Python 3.11 and 3.12), Compose/integration/
+image-scan, and Gitleaks jobs, plus a small job that reads the pinned images from
+`docker compose config --images` so CI never scans or tests a different version from the one
+Compose runs. It runs on pull requests and on pushes to main. At the re-audit fixes PR the suite
+has 415 tests: 393 pass locally against PostgreSQL 18.6, plus 22 that need the Docker CLI and run
+in CI, at 86% line + branch coverage (gate: 80%). The Docker job runs the full integration script
+([latest runs](https://github.com/VRCHAMPION/honeylens/actions/workflows/ci.yml)). Without `HL_TEST_PG` or Docker, the database and
 Compose cases are reported as skipped, so a plain local `pytest` shows lower coverage than CI.
 
 ## Performance
@@ -389,7 +391,7 @@ provider before exposing Cowrie publicly. The Docker/PostgreSQL suite already ru
 
 ## Verification status
 
-* **Hosted CI (every push and pull request):** ruff, bandit, pip-audit, ShellCheck, hadolint; the
+* **Hosted CI (every pull request and every push to main):** ruff, bandit, pip-audit, ShellCheck, hadolint; the
   PostgreSQL-backed pytest suite with an 80% coverage gate; Compose config and port-policy checks,
   Trivy, the full Docker integration test (including host-side checks that 127.0.0.1:3000 and
   127.0.0.1:2222 answer); and a full-history Gitleaks scan with a canary.
