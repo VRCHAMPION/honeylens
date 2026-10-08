@@ -11,10 +11,13 @@ logged; only service names and ports are printed. Plain validation uses
 * anything other than Cowrie 2222 and Grafana 3000 is published,
 * PostgreSQL publishes a port,
 * a service uses host networking, privileged mode, or mounts the Docker socket,
-* the obsolete top-level ``version:`` key is present.
+* the obsolete top-level ``version:`` key is present,
+* a service publishes a port but is attached ONLY to ``internal: true``
+  networks (Docker then silently skips the port, so it never binds).
 
 ``--live`` additionally inspects RUNNING containers with ``docker ps`` so the
-real bindings are checked too.
+real bindings are checked too, and FAILS if Cowrie (2222) or Grafana (3000) has
+no published port at all.
 
 Usage:  python scripts/check_ports.py [--live] [-f docker-compose.yml]
 Exit code 0 = safe, 1 = problem found.
@@ -29,6 +32,8 @@ import sys
 from pathlib import Path
 
 ALLOWED = {("cowrie", 2222), ("grafana", 3000)}
+# Services whose port must really be published when the stack runs (--live).
+EXPECTED_LIVE = {"cowrie": 2222, "grafana": 3000}
 
 
 def compose_config(files: list[str], env_file: str | None) -> dict:
@@ -48,7 +53,11 @@ def check_static(cfg: dict, raw_files: list[str], allowed: set[tuple[str, int]],
         for line in Path(f).read_text(encoding="utf-8").splitlines():
             if line.startswith("version:"):
                 problems.append(f"{f}: obsolete top-level 'version:' key")
+    networks = cfg.get("networks", {}) or {}
     for name, svc in cfg.get("services", {}).items():
+        attached = list(svc.get("networks") or [])
+        if svc.get("ports") and attached and all((networks.get(n) or {}).get("internal") for n in attached):
+            problems.append(f"{name}: publishes ports but is only on internal networks (Docker will not bind them)")
         if svc.get("network_mode") == "host":
             problems.append(f"{name}: network_mode host is forbidden")
         if svc.get("privileged"):
@@ -69,18 +78,24 @@ def check_static(cfg: dict, raw_files: list[str], allowed: set[tuple[str, int]],
     return problems
 
 
-def check_live() -> list[str]:
+def check_live(cloud: bool = False) -> list[str]:
     out = subprocess.run(  # noqa: S603  # nosec B603 B607
         ["docker", "ps", "--filter", "label=com.docker.compose.project=honeylens", "--format", "{{.Names}}\t{{.Ports}}"],  # noqa: S607
         check=True, capture_output=True, text=True,
     ).stdout
     problems = []
+    published: set[str] = set()
     for line in out.splitlines():
         name, _, ports = line.partition("\t")
         for mapping in filter(None, (p.strip() for p in ports.split(","))):
-            if "->" in mapping and not mapping.startswith("127.0.0.1:"):
+            if "->" in mapping:
+                published.add(f"{name}|{mapping.split('->', 1)[1]}")
+            if "->" in mapping and not mapping.startswith("127.0.0.1:") and not (cloud and "-cowrie-" in name):
                 problems.append(f"LIVE {name}: {mapping} is not bound to 127.0.0.1")
         print(f"live  {name:28} {ports or '(no published ports)'}")
+    for svc, port in EXPECTED_LIVE.items():
+        if not any(f"-{svc}-" in p.split("|")[0] and p.split("|")[1].startswith(f"{port}/") for p in published):
+            problems.append(f"LIVE {svc}: port {port} is not published (is the container only on internal networks?)")
     return problems
 
 
@@ -106,7 +121,7 @@ def main() -> int:
                  for p in svc.get("ports", []) or []]
         print(f"config {name:12} {', '.join(ports) or '(no published ports)'}")
     if args.live:
-        problems += check_live()
+        problems += check_live(args.cloud)
     if problems:
         print("\nFAIL:")
         for p in problems:
