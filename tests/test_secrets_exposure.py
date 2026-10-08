@@ -100,7 +100,8 @@ def test_validation_commands_use_quiet_compose_config():
     for t in texts:
         for m in re.finditer(r"docker compose[^\n|]*\bconfig\b([^\n]*)", t):
             line = m.group(0)
-            assert re.search(r"(\s-q\b|--quiet|--format json)", line), line
+            # --images prints image names only (used to derive scan/service images).
+            assert re.search(r"(\s-q\b|--quiet|--format json|--images\b)", line), line
 
 
 def test_precommit_secret_hook_uses_working_gitleaks_and_env_rules():
