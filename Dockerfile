@@ -5,7 +5,7 @@
 # Base image is pinned to an exact version and is multi-arch (amd64 + arm64),
 # so it runs on Intel/AMD laptops, Apple Silicon Macs and Oracle Ampere ARM VMs.
 
-FROM python:3.12.13-slim-trixie AS build
+FROM python:3.14.7-slim-trixie AS build
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /src
 COPY pyproject.toml README.md ./
@@ -16,7 +16,7 @@ RUN python -m venv /opt/venv \
  && /opt/venv/bin/pip install --no-cache-dir . \
  && /opt/venv/bin/python -m pip uninstall -y pip
 
-FROM python:3.12.13-slim-trixie
+FROM python:3.14.7-slim-trixie
 LABEL org.opencontainers.image.title="honeylens" \
       org.opencontainers.image.description="HoneyLens pipeline, report and simulator" \
       org.opencontainers.image.licenses="MIT"
