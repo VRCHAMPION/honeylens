@@ -149,7 +149,9 @@ def _recount(conn: Any, session_ids: list[str]) -> None:
           username       = l.username,
           commands_count = COALESCE(c.n, 0),
           downloads_count = COALESCE(d.n, 0),
-          duration_s = COALESCE(s.duration_s, EXTRACT(EPOCH FROM (s.end_ts - s.start_ts)))
+          -- Grows with every batch: the larger of Cowrie's reported duration (from
+          -- session.closed) and the observed event span. GREATEST ignores NULLs.
+          duration_s = GREATEST(s.duration_s, EXTRACT(EPOCH FROM (s.end_ts - s.start_ts)))
         FROM (SELECT unnest(%s::text[]) AS sid) ids
         LEFT JOIN LATERAL (
             SELECT count(*) total, count(*) FILTER (WHERE NOT success) failed, bool_or(success) ok,
