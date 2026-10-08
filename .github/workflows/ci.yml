@@ -93,6 +93,11 @@ jobs:
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
             image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 honeylens:1.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install dependencies for generated export validation
+        run: pip install -e . stix2==3.0.2
       - name: full integration test (clean volumes, real Cowrie + PostgreSQL + Grafana)
         run: python3 scripts/integration_test.py
       - name: no generated secret value in evidence, logs or the release ZIP
