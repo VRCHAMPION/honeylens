@@ -164,7 +164,7 @@ services:
 
   grafana:
     <<: *hardening
-    image: grafana/grafana:12.4.12
+    image: grafana/grafana:13.2.3
     user: "472:0"               # Grafana's own non-root user
     read_only: true
     tmpfs:
