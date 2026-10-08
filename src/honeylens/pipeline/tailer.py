@@ -12,7 +12,11 @@ Problems this solves (all tested in tests/test_tailer.py):
 * **Partial lines** - a line without a trailing newline is still being written;
   we leave it for the next poll.
 * **Oversized lines** - a line longer than the limit is skipped in chunks
-  without ever loading it fully into memory, and counted.
+  without ever loading it fully into memory, and counted once. If the giant
+  line is still being written, the file remembers that it is mid-line
+  (``FileState.skipping``) so the rest of it is skipped on the next poll
+  instead of being parsed as a new (malformed) line. After a restart this is
+  re-detected from the byte before the saved offset.
 """
 
 from __future__ import annotations
@@ -34,6 +38,8 @@ class FileState:
     path: str
     offset: int = 0
     head_hash: str | None = None
+    # True while the offset sits inside an oversized line; None = not known yet.
+    skipping: bool | None = None
 
 
 @dataclass
@@ -54,6 +60,8 @@ class ReadResult:
     oversized: int = 0
     # Offsets that moved forward without producing lines (skipped oversized data).
     skipped_to: dict[str, int] = field(default_factory=dict)
+    # New "inside an oversized line" flag per file, applied on commit.
+    skipping: dict[str, bool] = field(default_factory=dict)
 
 
 def file_key(st: os.stat_result) -> str:
@@ -107,9 +115,9 @@ class Tailer:
                         self.renamed.add(key)  # renamed by rotation: same inode, new name
                     state.path = path
                     if st.st_size < state.offset:
-                        state.offset, state.head_hash = 0, hh  # truncated
+                        state.offset, state.head_hash, state.skipping = 0, hh, False  # truncated
                     elif state.head_hash and hh and state.head_hash != hh:
-                        state.offset, state.head_hash = 0, hh  # inode reused by a new file
+                        state.offset, state.head_hash, state.skipping = 0, hh, False  # inode reused by a new file
                     elif state.head_hash is None and hh:
                         state.head_hash = hh
                 found[key] = (st.st_mtime, state)
@@ -144,10 +152,19 @@ class Tailer:
         except OSError:
             return
         try:
+            if state.skipping is None:
+                # Unknown (e.g. offset restored after a restart): a saved offset
+                # normally sits just after a newline; anything else means it was
+                # committed in the middle of an oversized line.
+                if state.offset > 0:
+                    fh.seek(state.offset - 1)
+                    state.skipping = fh.read(1) not in (b"\n", b"")
+                else:
+                    state.skipping = False
             fh.seek(state.offset)
             pos = state.offset
             buf = b""
-            skipping = False
+            skipping = state.skipping
             while budget > 0:
                 chunk = fh.read(READ_CHUNK)
                 if not chunk:
@@ -177,6 +194,8 @@ class Tailer:
                         continue
                     result.lines.append(Line(state.key, state.path, line, pos))
                     budget -= 1
+            if skipping != state.skipping:
+                result.skipping[state.key] = skipping
         finally:
             fh.close()
 
@@ -189,6 +208,10 @@ class Tailer:
             if st and off > st.offset:
                 st.offset = off
                 changed[key] = st
+        for key, flag in result.skipping.items():
+            st = self.states.get(key)
+            if st:
+                st.skipping = flag
         for line in result.lines:
             st = self.states.get(line.key)
             if st and line.end_offset > st.offset:
