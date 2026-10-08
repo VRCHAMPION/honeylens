@@ -2,13 +2,28 @@
 
 **Audit date:** 2026-10-08
 
-**FINAL VERDICT: NOT READY TO CLAIM VERIFIED RELEASE**
+**CURRENT VERDICT: HOSTED CI VERIFIED; CLOUD DEPLOYMENT AND THROUGHPUT REMAIN UNVERIFIED**
 
-The staged candidate is reviewable and the working-tree secret scan is clean, but the release gate
-is not met: coverage is 63.98% against the configured 80%; Docker, PostgreSQL, integration and
-hosted CI could not run; and there is no Git history to scan. No commit or push was made.
+The private GitHub repository is [VRCHAMPION/honeylens](https://github.com/VRCHAMPION/honeylens).
+Commit `b8602c9` passed [GitHub Actions run 37808655086](https://github.com/VRCHAMPION/honeylens/actions/runs/37808655086):
+all four jobs succeeded. The PostgreSQL-backed pytest job passed 373 tests at 85.69% combined
+coverage (the configured gate is 80%). Lint/static checks, the full-history Gitleaks scan, image
+checks, Docker integration, and the generated-secret/package check also passed.
 
-## 1. Repository and environment
+The non-gating Trivy report listed 44 HIGH/CRITICAL findings for `honeylens:1.0.0`; the separate
+gate for fixed CRITICAL findings in that image passed. This is not a zero-vulnerability claim.
+Cloud-provider behavior and the previously quoted throughput remain unverified, so this CI result
+does not establish a deployed or production-validated release.
+
+The final source tree contains 135 tracked files totaling 2,208,748 bytes. Its clean `honeylens-project.zip`
+contains the same 135 paths, passes the ZIP integrity check, and passes the package secret-exposure
+scan. The archive is kept outside the repository.
+
+The numbered sections below preserve the initial Windows pre-push audit. Their staged/no-remote,
+63.98% coverage, and locally blocked-service entries describe that earlier snapshot; the hosted
+results above supersede those entries for checks exercised by GitHub Actions.
+
+## 1. Repository and environment — initial local snapshot
 
 | Item | Result |
 |---|---|
@@ -137,7 +152,7 @@ This is within the supported range, but hosted execution on either version was n
 
 ## 8. Release package and fresh-unzip verification
 
-**VERIFIED: package script** `scripts/package.sh` built the candidate outside the repository with
+**VERIFIED: initial pre-push package** `scripts/package.sh` built the original candidate outside the repository with
 a temporary Python standard-library ZIP shim because the host ZIP utility is unavailable. The ZIP
 integrity check passed, it contains 135 files and all required paths, and forbidden entries counted
 0. `scripts/check_secrets_exposure.py` passed against the final archive; the package script also ran
@@ -151,8 +166,9 @@ pre-commit config, Compose YAML syntax, shell syntax, and the project secret che
 Docker Compose semantic/runtime checks remain **BLOCKED**. A search found no absolute references to
 the original workspace in the extracted files.
 
-**Archive size:** 1,385,591 bytes (exact final ZIP; outside the repository under the system temp
-folder). The value is filled from the final build and checked against the archive on disk.
+**Initial archive size:** 1,385,591 bytes (pre-push candidate ZIP, outside the repository under the
+system temp folder). The current-branch archive is recorded with the current status at the top of
+this audit.
 
 ### Commands and execution notes
 
@@ -200,7 +216,7 @@ directories); regenerated caches from this verification are removed before final
 Intentional Cowrie fake credentials, six screenshots, sample HTML/CSV/STIX/Navigator data, MITRE
 snapshot, licenses and attribution remain in the candidate.
 
-### Staged-file audit
+### Initial staged-file inventory (before push)
 
 | PATH | TYPE | SIZE (bytes) | TRACKED/STAGED | REASON |
 |---|---|---:|---|---|
@@ -340,25 +356,11 @@ snapshot, licenses and attribution remain in the candidate.
 | `tests/test_stix_validation.py` | Python | 1,860 | STAGED (new) | Automated regression and integration tests |
 | `tests/test_tailer.py` | Python | 3,018 | STAGED (new) | Automated regression and integration tests |
 
-## 14. Work required before a verified push
+## 14. Remaining verification boundaries
 
-1. Run Docker Compose validation and actual port/container checks on a Docker-enabled host.
-2. Run clean PostgreSQL migrations, role-denial tests, full DB suite, and outage/replay tests.
-3. Run scripts/integration_test.py only in a disposable stack after reviewing its down -v.
-4. Reach and observe the configured 80% coverage threshold; do not lower it just to make CI green.
-5. Build and scan all CI images with Trivy; record findings rather than claiming zero.
-6. Execute hosted GitHub Actions after you create the repository and remote.
-7. Keep cloud status **UNVERIFIED** until a provider deployment is independently checked.
-
-### Manual GitHub commands (do not run until the blockers above are cleared)
-
-```powershell
-git diff --cached --check
-git diff --cached --stat
-git commit -m "Prepare HoneyLens for GitHub review"
-git remote add origin https://github.com/<OWNER>/honeylens.git
-git remote -v
-git push -u origin main
-gh run list --repo <OWNER>/honeylens
-gh run watch <RUN_ID> --repo <OWNER>/honeylens
-```
+- **VERIFIED:** hosted CI, PostgreSQL-backed pytest and migrations, Docker Compose safety and
+  integration, Grafana datasource/panels, generated exports, full-history Gitleaks, and the
+  configured Trivy critical-fix gate, as recorded above.
+- **UNVERIFIED:** cloud-provider deployment/firewall behavior and the historical throughput claim.
+- Review the Trivy HIGH/CRITICAL findings before making broader vulnerability claims; the configured
+  fixed-CRITICAL gate is narrower than an all-findings clean bill of health.

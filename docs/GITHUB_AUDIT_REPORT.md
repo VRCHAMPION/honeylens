@@ -2,27 +2,28 @@
 
 **Audit date:** 2026-10-08
 
-**Scope:** HoneyLens project root and the staged GitHub candidate
-**Verdict:** **NOT READY to claim a verified release.** The local repository is initialized on
-main with a reviewable staged candidate and no commit or remote. The working-tree secret scan is
-clean, but the 80% CI coverage gate failed at 63.98%; Docker, PostgreSQL integration, hosted CI, and
-historical secret exposure remain blocked or unverified.
+**Scope:** HoneyLens project, private GitHub repository, and hosted Actions run
+**Current verdict:** **HOSTED CI VERIFIED; cloud deployment and throughput remain unverified.**
+Commit `b8602c9` passed [Actions run 37808655086](https://github.com/VRCHAMPION/honeylens/actions/runs/37808655086):
+all four jobs succeeded. Hosted pytest passed 373 tests at 85.69% coverage against the 80% gate;
+Docker/PostgreSQL integration, full-history secret scanning, static checks, and the generated-package
+secret scan also passed.
+
+Trivy's non-gating report listed 44 HIGH/CRITICAL findings for `honeylens:1.0.0`. Its separate
+gate for fixed CRITICAL findings in that image passed; this does not mean the image has no findings.
+Cloud-provider behavior and the historical throughput figure are still unverified.
+
+> The detailed sections below preserve the original pre-push Windows audit. See “Latest hosted
+> verification” at the end for the current hosted results.
 
 ## Executive verdict
 
-HoneyLens is a coherent, deliberately scoped SSH honeypot analytics project. The included
-screenshots and examples are clearly simulated, dependencies are pinned, SQL uses bound values,
-viewing roles are read-only, and the runtime configuration aims to limit ports and privileges.
-The audit found and fixed concrete gaps in secret-file filtering, CSV spreadsheet safety, hostile
-JSON numbers, simulator DNS behavior, optional API egress, cloud firewall order, Gitleaks CI, and
-documentation claims.
+HoneyLens is a deliberately scoped SSH honeypot analytics project. This report began as a local
+pre-push audit; historical Windows-only results are retained below. The hosted run now verifies the
+configured CI scope, while cloud deployment and performance benchmarking remain outside that
+evidence.
 
-The current staged tree is suitable for review. A public push should wait until the
-Compose/cloud configuration and package workflow are validated in a Docker-enabled environment
-and GitHub CI passes its 80% coverage gate. The empty main branch has no commit history or remote
-to inspect. The candidate is staged; no commit, push, or history rewrite was performed.
-
-## Repository statistics
+## Initial staged-candidate statistics
 
 Counts are from the staged candidate working tree, excluding Git internals and ignored runtime caches.
 
@@ -44,7 +45,7 @@ The bundled 151,417-byte ATT&CK v19.2 snapshot supports offline rule validation.
 include a 95,452-byte STIX bundle and 67,334-byte synthetic Cowrie event set. These are intentional
 and all are well within the repository size budget.
 
-### Largest 20 files
+### Largest 20 files in the initial staged snapshot
 
 Sizes in bytes; paths are relative to the repository root.
 
@@ -347,7 +348,7 @@ artifacts covered by `.gitignore`.
 | GitHub Actions hosted run / 80% gate | **UNVERIFIED** |
 | Cloud egress and provider/account checks | **UNVERIFIED** |
 
-## Final verification - 2026-10-08
+## Initial local verification - 2026-10-08 (before first push)
 
 This dated section records the fresh verification pass requested after the earlier audit. The
 previous quality-gate table above is preserved as historical evidence; the results below supersede
@@ -411,3 +412,25 @@ Cloud documentation distinguishes private Tailscale/bastion administration from 
 source-IP-restricted public SSH fallback. Firewall-before-Cowrie ordering, private PostgreSQL and
 Grafana, account isolation, backups, disk retention, reclamation and billing caveats are documented;
 none is represented as deployed evidence.
+
+## Latest hosted verification - commit `b8602c9`
+
+[GitHub Actions run 37808655086](https://github.com/VRCHAMPION/honeylens/actions/runs/37808655086)
+completed successfully on 2026-10-08. The repository was private, `main` pointed at this commit,
+and the run finished with all four jobs green.
+
+| Check | Hosted result |
+|---|---|
+| Pytest + PostgreSQL + coverage | **PASS:** 373 passed; 85.69% combined coverage; 80% gate reached; Python 3.12.15 |
+| Ruff, Bandit, dependency audit, ShellCheck, Hadolint | **PASS:** lint/static job succeeded |
+| Gitleaks full-history scan | **PASS:** 7 commits scanned; no leaks reported |
+| Compose config and loopback bindings | **PASS:** laptop/cloud Compose validation and live port binding checks |
+| Docker integration | **PASS:** clean-volume stack; live Cowrie sessions; PostgreSQL outage/recovery, replay, rotation, malformed input, role permissions, container hardening, Grafana panels, reports, and fail-closed secret checks |
+| STIX/Navigator generated exports | **PASS:** 112 indicators, 24 attack patterns; Navigator layer 4.5 with 29 entries |
+| Trivy | **PASS, configured gate:** no fixed CRITICAL finding in `honeylens:1.0.0`; the non-gating HIGH/CRITICAL report listed 44 findings for that image |
+| Package and secret exposure check | **PASS:** CI package built and scanned; no generated secret appeared in the package/log/evidence scan |
+
+This run verifies the project against the checks defined in `.github/workflows/ci.yml`. It does not
+verify a cloud-provider deployment, public firewall behavior, or the historical throughput claim.
+The 44 Trivy findings remain a review item; a passing fixed-CRITICAL gate is narrower than a clean
+vulnerability report.

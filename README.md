@@ -132,14 +132,18 @@ More diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | 5 dashboards | **VERIFIED** in the provisioned Grafana JSON; each has database-backed queries |
 | 8 simulator personas | **VERIFIED** in source and persona safety tests |
 | 60 rules, 9 tactics, 45 techniques | **VERIFIED** against the bundled Enterprise ATT&CK v19.2 snapshot; this is rule coverage, not overall ATT&CK coverage |
-| 373 pytest cases collected; 321 passed, 52 skipped | **VERIFIED** on Windows / Python 3.11.9 during this audit. Skips require PostgreSQL or Docker, or Windows symlink privileges |
-| 63.98% local line and branch coverage | **VERIFIED** for that run; the configured 80% CI coverage gate **FAILED** locally because PostgreSQL/Docker-backed paths were unavailable |
+| 373 pytest cases collected; 321 passed, 52 skipped | **VERIFIED** on the local Windows / Python 3.11.9 run; skipped cases needed PostgreSQL, Docker, or Windows symlink privileges |
+| 63.98% local line and branch coverage | **VERIFIED** for that Windows run; its 80% threshold was not met while service-backed cases were skipped |
+| GitHub-hosted CI | **PASSED** all four jobs; the PostgreSQL-backed Python 3.12.15 test job passed 373 tests with 85.69% coverage, above the 80% gate |
 
-The workflow asks GitHub-hosted CI to meet an 80% coverage gate and runs Docker integration checks,
-but that hosted workflow has not been executed from this workspace. The previously stated throughput
-of about 6,400 events/second is **UNVERIFIED**: a PostgreSQL benchmark script exists, but no retained
-output or machine details support that result. No deployed honeypot data was available to verify any
-real attacker sessions; included samples are **SIMULATED**.
+The [hosted Actions run](https://github.com/VRCHAMPION/honeylens/actions/runs/37808655086) also passed
+Docker integration, full-history secret scanning, and the configured image gate. Trivy's non-gating
+report listed 44 HIGH/CRITICAL findings for the HoneyLens image; the fixed-CRITICAL gate passed, and
+the report is documented in [the audit](docs/GITHUB_AUDIT_REPORT.md). The earlier local coverage
+result remains useful as a Windows baseline. Throughput of about 6,400 events/second is
+**UNVERIFIED**: a PostgreSQL benchmark script exists, but no retained output or machine details
+support that result. No deployed honeypot data was available to verify any real attacker sessions;
+included samples are **SIMULATED**.
 
 ## Safety
 
