@@ -23,9 +23,13 @@ sshd -t   # validate config before restarting
 # Ubuntu 22.04+/24.04 uses socket activation; update the socket too if present.
 if systemctl list-unit-files | grep -q '^ssh.socket'; then
   mkdir -p /etc/systemd/system/ssh.socket.d
-  printf '[Socket]\nListenStream=\nListenStream=%s\n' "$PORT" > /etc/systemd/system/ssh.socket.d/override.conf
+  # Ubuntu 24.04 ssh.socket sets BindIPv6Only=ipv6-only, so a bare port would
+  # listen on IPv6 only (IPv4/Tailscale 100.x gets "connection refused").
+  # List IPv4 and IPv6 explicitly. Found on Azure Ubuntu 24.04, 2026-10-11.
+  printf '[Socket]\nListenStream=\nListenStream=0.0.0.0:%s\nListenStream=[::]:%s\n' "$PORT" "$PORT" > /etc/systemd/system/ssh.socket.d/override.conf
   systemctl daemon-reload
   systemctl restart ssh.socket
 fi
 systemctl restart ssh 2>/dev/null || systemctl restart sshd
-echo "Admin SSH now on port $PORT. Test in a NEW terminal: ssh -p $PORT <user>@<vm-ip>"
+ss -tln | grep ":$PORT " || true
+echo "Admin SSH now on port $PORT (expect 0.0.0.0 and [::] above). Test in a NEW terminal: ssh -p $PORT <user>@<vm-ip>"
