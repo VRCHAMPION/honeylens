@@ -10,7 +10,9 @@
 
 With ``mask_ips=True`` IP addresses are masked in CSV (including IPs inside
 URLs), IP indicators are left out of STIX entirely (a masked IP is not a valid
-STIX pattern) and IPs inside URL indicators are masked.
+STIX pattern) and IPs inside URL indicators are masked. URLs that become
+identical once masked are merged (attempts summed, earliest first-seen, latest
+last-seen) the same way in CSV and STIX, so both files always agree.
 """
 
 from __future__ import annotations
@@ -43,6 +45,25 @@ def _esc(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
+def url_iocs(d: ReportData, mask_ips: bool = False) -> list[dict[str, Any]]:
+    """URL IOCs keyed by the value that is exported (masked or not), merged when equal."""
+    merged: dict[str, dict[str, Any]] = {}
+    for r in d.ioc_urls:
+        url = mask_ips_in_text(r["url"]) if mask_ips else r["url"]
+        cur = merged.get(url)
+        if cur is None:
+            merged[url] = {"url": url, "attempts": int(r["attempts"] or 0), "first_seen": r["first_seen"],
+                           "last_seen": r["last_seen"], "simulated": bool(r["simulated"])}
+            continue
+        cur["attempts"] += int(r["attempts"] or 0)
+        firsts = [t for t in (cur["first_seen"], r["first_seen"]) if t is not None]
+        lasts = [t for t in (cur["last_seen"], r["last_seen"]) if t is not None]
+        cur["first_seen"] = min(firsts) if firsts else None
+        cur["last_seen"] = max(lasts) if lasts else None
+        cur["simulated"] = cur["simulated"] or bool(r["simulated"])  # same as bool_or() in data.py
+    return list(merged.values())
+
+
 def to_csv(d: ReportData, mask_ips: bool = False) -> str:
     """One row per IOC: type, value, counts, first/last seen (UTC), simulated flag."""
     buf = io.StringIO()
@@ -60,8 +81,8 @@ def to_csv(d: ReportData, mask_ips: bool = False) -> str:
                     mask_ip(r["ip"]) if mask_ips else r["ip"], r["sessions"],
                     _stix_time(r["first_seen"]), _stix_time(r["last_seen"]), r["simulated"],
                     safe(f"max severity {r['max_severity']}; classes {','.join(c for c in r['classes'] if c)}")])
-    for r in d.ioc_urls:
-        url = mask_ips_in_text(r["url"]) if mask_ips else r["url"]
+    for r in url_iocs(d, mask_ips):
+        url = r["url"]
         w.writerow(["url", safe(url), r["attempts"], _stix_time(r["first_seen"]), _stix_time(r["last_seen"]),
                     r["simulated"], "download attempted (never fetched)"])
     for r in d.ioc_hashes:
@@ -93,12 +114,8 @@ def to_stix(d: ReportData, mask_ips: bool = False) -> dict[str, Any]:
             kind = "ipv6-addr" if ":" in r["ip"] else "ipv4-addr"
             indicator(f"ip:{r['ip']}", f"Honeypot attacker IP {r['ip']}", f"[{kind}:value = '{_esc(r['ip'])}']",
                       r["first_seen"], r["simulated"], f"{r['sessions']} sessions, max severity {r['max_severity']}")
-    seen_urls: set[str] = set()
-    for r in d.ioc_urls:
-        url = mask_ips_in_text(r["url"]) if mask_ips else r["url"]
-        if url in seen_urls:
-            continue  # two URLs can become identical once their IPs are masked
-        seen_urls.add(url)
+    for r in url_iocs(d, mask_ips):
+        url = r["url"]
         indicator(f"url:{url}", "URL an attacker tried to download (never fetched)",
                   f"[url:value = '{_esc(url)}']", r["first_seen"], r["simulated"], f"{r['attempts']} attempts")
     for r in d.ioc_hashes:

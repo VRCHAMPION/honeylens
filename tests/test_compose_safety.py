@@ -145,3 +145,17 @@ def test_live_check_requires_published_ports(monkeypatch):
     assert cp.check_live() == []
     R.stdout = "honeylens-cowrie-1\t0.0.0.0:22->2222/tcp\nhoneylens-grafana-1\t127.0.0.1:3000->3000/tcp\n"
     assert cp.check_live() != [] and cp.check_live(cloud=True) == []
+
+
+def test_live_cloud_check_allows_only_public_22_to_2222(monkeypatch):
+    class R:
+        stdout = ""
+    monkeypatch.setattr(cp.subprocess, "run", lambda *a, **k: R())
+    grafana = "honeylens-grafana-1\t127.0.0.1:3000->3000/tcp\n"
+    R.stdout = "honeylens-cowrie-1\t0.0.0.0:22->2222/tcp, [::]:22->2222/tcp\n" + grafana
+    assert cp.check_live(cloud=True) == []
+    for stray in ("0.0.0.0:2223->2223/tcp", "0.0.0.0:2222->2222/tcp", "0.0.0.0:23->2223/tcp"):
+        R.stdout = f"honeylens-cowrie-1\t0.0.0.0:22->2222/tcp, {stray}\n" + grafana
+        assert any(stray in p for p in cp.check_live(cloud=True)), stray
+    R.stdout = "honeylens-cowrie-1\t0.0.0.0:22->2222/tcp\nhoneylens-grafana-1\t0.0.0.0:3000->3000/tcp\n"
+    assert any("grafana" in p for p in cp.check_live(cloud=True))

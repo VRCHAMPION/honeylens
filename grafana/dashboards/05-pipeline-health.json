@@ -15,36 +15,7 @@
   },
   "refresh": "1m",
   "templating": {
-    "list": [
-      {
-        "name": "data",
-        "label": "Data",
-        "type": "custom",
-        "query": "all,real,simulated",
-        "current": {
-          "text": "all",
-          "value": "all"
-        },
-        "options": [
-          {
-            "text": "all",
-            "value": "all",
-            "selected": true
-          },
-          {
-            "text": "real",
-            "value": "real",
-            "selected": false
-          },
-          {
-            "text": "simulated",
-            "value": "simulated",
-            "selected": false
-          }
-        ],
-        "description": "all = everything; real = internet attackers only; simulated = HoneyLens simulator only"
-      }
-    ]
+    "list": []
   },
   "panels": [
     {

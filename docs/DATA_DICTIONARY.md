@@ -33,7 +33,7 @@ real source (REAL). Rule: RFC 5737 IP, private/loopback IP (default setting) or 
 | login_attempts, login_failures, login_success, username | login facts (username = last successful) |
 | commands_count | commands typed |
 | downloads_count | download ATTEMPTS with a URL (never fetched) |
-| country_code, country, city, asn, as_org, lat, lon, geo_source | enrichment (`demo` / `mmdb` / `api` / `local` / `none`) |
+| country_code, country, city, asn, as_org, lat, lon, geo_source | enrichment (`demo` / `mmdb` / `api` / `local` / `none`); `country_code` is ISO 3166 alpha-2, `country` is always the full English name for every source |
 | classification | `scanner`, `brute-forcer`, `intruder`, `malware-dropper`, `cryptominer-like`, `honeypot-prober`, `unknown` |
 | severity, severity_label | 0-100 score; low <25, medium 25-49, high 50-74, critical ≥75 |
 | score_reasons | JSON list of `{rule, points, detail}` - why the score is what it is |
@@ -71,7 +71,8 @@ techniques (text[]), tactics (text[]), updated_at.
 
 ## pipeline_stats - one row per batch + a heartbeat every 30 s
 
-ts, lines_read, events_ingested, duplicates, malformed, oversized, ignored (loopback healthchecks),
+ts, lines_read, events_ingested, duplicates, malformed (bad JSON/fields, plus "quarantined" lines PostgreSQL
+rejected; the log names their event_uid), oversized, ignored (loopback healthchecks),
 sessions_updated, batch_ms, lag_bytes (unread bytes in tracked files), files_tracked, db_errors (since process start).
 
 ## ingest_offsets

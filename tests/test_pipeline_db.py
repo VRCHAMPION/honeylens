@@ -151,3 +151,92 @@ def test_session_duration_grows_per_batch(clean_db, tmp_path):
         fh.write(ev(s, "cowrie.session.closed", "2026-10-04T10:00:41Z", duration=41.5) + "\n")
     p.drain()
     assert q(clean_db, sql, s)[0][0] == 41.5
+
+
+TS = "2026-10-04T10:00:00Z"
+
+
+def test_lone_surrogate_does_not_stall_ingestion(clean_db, tmp_path):
+    """A JSON-escaped lone surrogate used to make PostgreSQL reject the whole batch forever."""
+    log = tmp_path / "cowrie.json"
+    bad = ('{"eventid":"cowrie.command.input","session":"sur001","src_ip":"203.0.113.9","timestamp":"' + TS + '",'
+           '"sensor":"t","input":"echo \\ud800 \\udcff end"}')
+    log.write_text("\n".join([bad, ev("good01", "cowrie.session.connect", TS)]) + "\n")
+    t = make_pipeline(clean_db, tmp_path).drain()
+    assert t.inserted == 2 and t.malformed == 0
+    assert q(clean_db, "SELECT command FROM honeylens.commands")[0][0] == "echo   end"
+    assert q(clean_db, "SELECT byte_offset FROM honeylens.ingest_offsets")[0][0] == log.stat().st_size
+
+
+def test_poison_line_is_quarantined_and_batch_continues(clean_db, tmp_path, monkeypatch):
+    """Even if a value still reaches PostgreSQL unsanitised, only that line is skipped."""
+    import honeylens.pipeline.events as events_mod
+
+    monkeypatch.setattr(events_mod, "_scrub", lambda obj, depth=0: obj)  # simulate a sanitiser gap
+    log = tmp_path / "cowrie.json"
+    bad = ('{"eventid":"cowrie.session.connect","session":"bad001","src_ip":"203.0.113.9","timestamp":"' + TS + '",'
+           '"sensor":"t","junk":"\\ud800"}')
+    log.write_text("\n".join([ev("good01", "cowrie.session.connect", TS), bad,
+                              ev("good02", "cowrie.session.connect", TS)]) + "\n")
+    p = make_pipeline(clean_db, tmp_path)
+    t = p.drain()
+    assert t.inserted == 2 and t.quarantined == 1 and t.malformed == 1
+    assert {r[0] for r in q(clean_db, "SELECT session_id FROM honeylens.sessions")} == {"good01", "good02"}
+    assert q(clean_db, "SELECT byte_offset FROM honeylens.ingest_offsets")[0][0] == log.stat().st_size
+    assert q(clean_db, "SELECT sum(malformed) FROM honeylens.pipeline_stats")[0][0] == 1
+    # restart: the poison line is not retried and nothing is duplicated
+    t2 = make_pipeline(clean_db, tmp_path).drain()
+    assert t2.lines == 0
+    assert q(clean_db, "SELECT count(*) FROM honeylens.raw_events")[0][0] == 2
+
+
+def test_python_error_for_one_event_is_quarantined(clean_db, tmp_path):
+    (tmp_path / "cowrie.json").write_text("\n".join([
+        ev("good01", "cowrie.session.connect", TS),
+        ev("boom01", "cowrie.session.connect", TS, src_ip="198.51.100.66"),
+    ]) + "\n")
+    p = make_pipeline(clean_db, tmp_path)
+    real = p.enricher.lookup
+
+    def flaky(ip, conn=None):
+        if ip == "198.51.100.66":
+            raise KeyError("bug in enrichment for this IP")
+        return real(ip, conn)
+
+    p.enricher.lookup = flaky
+    t = p.drain()
+    assert t.inserted == 1 and t.quarantined == 1
+    assert [r[0] for r in q(clean_db, "SELECT session_id FROM honeylens.sessions")] == ["good01"]
+
+
+def test_parser_crash_counts_as_malformed(clean_db, tmp_path, monkeypatch):
+    import honeylens.pipeline.runner as runner_mod
+
+    def crash(data, _private):
+        if b"crash" in data:
+            raise RuntimeError("unexpected parser bug")
+        return real_parse(data, _private)
+
+    real_parse = runner_mod.parse_line
+    monkeypatch.setattr(runner_mod, "parse_line", crash)
+    (tmp_path / "cowrie.json").write_text(ev("crash1", "cowrie.session.connect", TS) + "\n"
+                                          + ev("good01", "cowrie.session.connect", TS) + "\n")
+    t = make_pipeline(clean_db, tmp_path).drain()
+    assert t.malformed == 1 and t.inserted == 1
+
+
+def test_database_errors_are_not_quarantined(clean_db, tmp_path):
+    """A non-data error (here: missing privilege) must stop the batch for a retry, never skip lines."""
+    (tmp_path / "cowrie.json").write_text(ev("good01", "cowrie.session.connect", TS) + "\n")
+    with psycopg.connect(clean_db["admin"], autocommit=True) as c:
+        c.execute("REVOKE INSERT ON honeylens.raw_events FROM hl_pipeline")
+    try:
+        p = make_pipeline(clean_db, tmp_path)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            p.run_once()
+        assert p.totals.quarantined == 0
+    finally:
+        with psycopg.connect(clean_db["admin"], autocommit=True) as c:
+            c.execute("GRANT INSERT ON honeylens.raw_events TO hl_pipeline")
+    p._drop()
+    assert make_pipeline(clean_db, tmp_path).drain().inserted == 1

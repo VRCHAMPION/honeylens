@@ -37,3 +37,12 @@ def test_generated_dashboards_match_generator(tmp_path, monkeypatch):
     for f in sorted(DASH.glob("*.json")):
         assert (tmp_path / f.name).read_text(encoding="utf-8") == f.read_text(encoding="utf-8"), \
             f"{f.name} is stale: run python scripts/build_dashboards.py"
+
+
+def test_every_dropdown_is_used_by_a_query():
+    for f in sorted(DASH.glob("*.json")):
+        board = json.loads(f.read_text(encoding="utf-8"))
+        sql = " ".join(t.get("rawSql", "") for p in board.get("panels", []) for t in p.get("targets", []))
+        for var in board.get("templating", {}).get("list", []):
+            name = var["name"]
+            assert f"${{{name}" in sql or f"${name}" in sql, f"{f.name}: dropdown {name!r} is not used by any panel"

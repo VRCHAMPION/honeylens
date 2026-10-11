@@ -63,8 +63,12 @@ SETGID) to fix folder ownership before dropping to the `postgres` user; only tho
 ## 6. Reports and ethics
 
 * URLs and IPs are **defanged** in reports (`hxxp[://]198[.]51[.]100[.]7`); `--mask-ips` hides
-  host parts before public sharing: source IPs and every IPv4/IPv6 address inside URLs, commands
-  and session summaries (plain or defanged), in the HTML, CSV and STIX outputs.
+  host parts before public sharing: source IPs and every IPv4/IPv6 address inside URLs, commands,
+  session summaries, usernames and passwords (plain, defanged, leading-zero octets, IPv4-in-IPv6,
+  and numeric/hex URL hosts such as `http://3325256727/`), in the HTML, CSV and STIX outputs.
+  Usernames and passwords themselves stay visible: they are the attackers' guesses and the point of
+  the credential tables. Only IPs typed into them are masked. URL IOCs that become identical once
+  masked are merged, so CSV and STIX agree.
 * **No attribution claims, no hack-back.** GeoIP shows where an IP is registered, not who the
   attacker is; the report says so. IOCs are labelled low-confidence.
 
