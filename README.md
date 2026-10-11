@@ -232,7 +232,6 @@ verification on the target provider before treating them as production controls.
 | [DEPLOY_CLOUD.md](DEPLOY_CLOUD.md) | cloud deployment (Oracle Cloud Always Free, AWS alternative) |
 | [SECURITY.md](SECURITY.md) | safety rules and how they are enforced |
 | [docs/](docs/) | architecture, threat model, data dictionary, ATT&CK coverage, analyst playbook, benchmarks |
-| [docs/archive/](docs/archive/) | historical pre-release audit notes |
 
 ## Attribution
 
