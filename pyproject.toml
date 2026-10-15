@@ -24,7 +24,7 @@ dev = [
   "setuptools>=83.0.0",       # keep the test/build environment off vulnerable old bootstrap versions
   "pytest==9.1.1",
   "pytest-cov==7.1.0",
-  "ruff==0.16.10",
+  "ruff==0.17.0",
   "bandit==1.9.4",
   "pip-audit==2.10.1",
   "pre-commit==4.6.2",
