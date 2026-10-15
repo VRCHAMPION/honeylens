@@ -93,7 +93,7 @@ services:
 
   cowrie:
     <<: *hardening
-    image: cowrie/cowrie:3.1.1
+    image: cowrie/cowrie:3.1.2
     user: "999:999"            # Cowrie's own non-root user
     read_only: true            # root filesystem cannot be changed
     tmpfs:
