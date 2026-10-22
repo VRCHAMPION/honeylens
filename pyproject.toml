@@ -37,6 +37,7 @@ honeylens-report = "honeylens.reporting.cli:main"
 honeylens-simulator = "honeylens.simulator.cli:main"
 honeylens-migrate = "honeylens.migrate:main"
 honeylens-report-scheduler = "honeylens.reporting.scheduler:main"
+honeylens-rescore = "honeylens.pipeline.rescore:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
