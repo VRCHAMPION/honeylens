@@ -13,11 +13,11 @@ TABLES = {"raw_events", "sessions", "login_attempts", "commands", "downloads", "
 
 def test_first_run_applied_everything(migrated):
     assert migrated["applied"] == ["001_schema.sql", "002_views_retention.sql", "003_grants.sql", "004_pipeline_ignored.sql",
-                                  "005_default_privileges.sql"]
+                                  "005_default_privileges.sql", "006_ip_bruteforce_ignore.sql"]
     with psycopg.connect(migrated["admin"]) as c:
         names = {r[0] for r in c.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='honeylens'")}
     assert names >= TABLES
-    assert {"v_unmapped_commands", "v_credentials", "v_session_overview", "v_attack_daily"} <= names
+    assert {"v_unmapped_commands", "v_credentials", "v_session_overview", "v_attack_daily", "real_sessions", "ignored_sessions"} <= names
 
 
 def test_second_and_third_run_are_noops(migrated):

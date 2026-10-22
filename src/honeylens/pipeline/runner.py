@@ -33,7 +33,7 @@ from honeylens.enrich.geo import build_enricher
 from honeylens.logutil import setup_logging
 from honeylens.mitre.attack import default_rules
 from honeylens.pipeline.events import BadEvent, parse_line
-from honeylens.pipeline.store import load_offsets, recompute_all, write_batch
+from honeylens.pipeline.store import ScoringConfig, load_offsets, recompute_all, write_batch
 from honeylens.pipeline.tailer import Tailer
 from honeylens.secretcheck import require_secret
 
@@ -73,6 +73,7 @@ class Pipeline:
         self.settings = settings
         self.tailer = Tailer([settings.input_glob, settings.extra_input_glob], settings.max_line_bytes)
         self.enricher = build_enricher(settings)
+        self.scoring = ScoringConfig.from_settings(settings)  # fails fast on a bad HL_IGNORE_IPS
         self.totals = Totals()
         self.stop = False
         self.conn: Any = None
@@ -120,7 +121,7 @@ class Pipeline:
         pending = self.tailer.pending_offsets(result)
         stats = None
         if result.lines or result.skipped_to or pending:
-            stats = write_batch(self.conn, events, self.enricher, pending, source)
+            stats = write_batch(self.conn, events, self.enricher, pending, source, self.scoring)
         now = time.time()
         batch_ms = (time.monotonic() - started) * 1000
         if stats is not None or now - self._last_stats >= HEARTBEAT_S:
@@ -218,10 +219,13 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGTERM, pipe.request_stop)
     signal.signal(signal.SIGINT, pipe.request_stop)
     log.info("pipeline starting", extra={"rules": len(rules), "glob": pipe.tailer.patterns,
-                                         "batch_size": pipe.settings.batch_size})
+                                         "batch_size": pipe.settings.batch_size,
+                                         "ignored_networks": len(pipe.scoring.ignore_networks),
+                                         "brute_window_min": pipe.scoring.brute_window_min,
+                                         "brute_min_failures": pipe.scoring.brute_min_failures})
     if args.recompute:
         pipe._connect()
-        n = recompute_all(pipe.conn, pipe.enricher)
+        n = recompute_all(pipe.conn, pipe.enricher, pipe.scoring)
         pipe.conn.commit()
         print(f"recomputed {n} sessions")
         return 0

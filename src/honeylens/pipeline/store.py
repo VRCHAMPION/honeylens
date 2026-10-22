@@ -22,17 +22,41 @@ from __future__ import annotations
 
 import ipaddress
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any
 
 from psycopg.types.json import Jsonb
 
+from honeylens.config import Network, Settings, ip_in
 from honeylens.enrich.geo import Enricher
 from honeylens.mitre.attack import match_command
 from honeylens.pipeline.events import Event
 from honeylens.pipeline.sanitize import defang
 from honeylens.pipeline.scoring import SessionFacts, score_session
 from honeylens.pipeline.tailer import FileState
+
+
+@dataclass(frozen=True)
+class ScoringConfig:
+    """Store-level settings that change how sessions are scored or flagged."""
+
+    brute_window_min: int = 60
+    brute_min_failures: int = 20
+    ignore_networks: tuple[Network, ...] = field(default_factory=tuple)
+
+    @classmethod
+    def from_settings(cls, settings: Settings) -> ScoringConfig:
+        """Build from environment-backed :class:`Settings` (raises on a bad HL_IGNORE_IPS)."""
+        return cls(settings.brute_window_min, settings.brute_min_failures, settings.ignore_networks)
+
+    @property
+    def brute_enabled(self) -> bool:
+        """Per-IP brute-force detection is on when both values are positive."""
+        return self.brute_window_min > 0 and self.brute_min_failures > 0
+
+
+DEFAULT_CONFIG = ScoringConfig()
 
 
 @dataclass
@@ -101,7 +125,7 @@ def _insert_children(conn: Any, events: list[Event]) -> None:
                 "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (event_uid, rule_id) DO NOTHING", matches)
 
 
-def _upsert_sessions(conn: Any, events: list[Event]) -> list[str]:
+def _upsert_sessions(conn: Any, events: list[Event], cfg: ScoringConfig = DEFAULT_CONFIG) -> list[str]:
     per: dict[str, dict[str, Any]] = {}
     for ev in events:
         s = per.setdefault(ev.session_id, {
@@ -136,6 +160,10 @@ def _upsert_sessions(conn: Any, events: list[Event]) -> list[str]:
                 (sid, s["ip"], s["src_port"], s["dst_port"], s["protocol"], s["sensor"], s["client"], s["hassh"],
                  s["start"], s["end"], s["duration"], s["sim"]),
             )
+            if ip_in(s["ip"], cfg.ignore_networks):
+                cur.execute(
+                    "INSERT INTO honeylens.ignored_sessions (session_id, src_ip) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                    (sid, s["ip"]))
     return list(per)
 
 
@@ -167,22 +195,41 @@ def _recount(conn: Any, session_ids: list[str]) -> None:
     )
 
 
-def _facts(conn: Any, sid: str) -> tuple[SessionFacts, dict[str, Any]]:
+def ip_window_failures(conn: Any, ip: str, start: Any, window_min: int) -> int:
+    """Failed logins from ``ip`` within +/- ``window_min`` minutes of ``start``, across all sessions.
+
+    Uses the partial index ``login_failed_ip_ts_idx (src_ip, ts) WHERE NOT success``
+    (migration 006), so it is an index range scan, never a table scan.
+    """
+    span = timedelta(minutes=window_min)
+    row = conn.execute(
+        "SELECT count(*) FROM honeylens.login_attempts WHERE src_ip = %s AND NOT success AND ts >= %s AND ts <= %s",
+        (ip, start - span, start + span)).fetchone()
+    return int(row[0])
+
+
+def _facts(conn: Any, sid: str, cfg: ScoringConfig = DEFAULT_CONFIG) -> tuple[SessionFacts, dict[str, Any]]:
     facts = SessionFacts()
     row = conn.execute(
-        "SELECT login_failures, login_success, downloads_count, client_version, host(src_ip), username, commands_count "
-        "FROM honeylens.sessions WHERE session_id = %s", (sid,)).fetchone()
+        "SELECT login_failures, login_success, downloads_count, client_version, host(src_ip), username, commands_count, "
+        "start_ts, login_attempts FROM honeylens.sessions WHERE session_id = %s", (sid,)).fetchone()
     facts.login_failures, facts.login_success, facts.downloads = row[0], row[1], row[2]
     facts.client_version = row[3] or ""
     meta = {"ip": row[4], "username": row[5], "commands": row[6]}
+    if cfg.brute_enabled and row[4] and row[6] == 0 and row[8] > 0:
+        # Only login-only sessions can be upgraded, so only they pay for the query.
+        facts.ip_brute_threshold = cfg.brute_min_failures
+        facts.ip_window_minutes = cfg.brute_window_min
+        facts.ip_window_failures = ip_window_failures(conn, row[4], row[7], cfg.brute_window_min)
     ok = conn.execute(
         "SELECT min(ts) FROM honeylens.login_attempts WHERE session_id = %s AND success", (sid,)).fetchone()
     facts.login_success_ts = ok[0] if ok else None
     facts.command_ts = [r[0] for r in conn.execute(
         "SELECT ts FROM honeylens.commands WHERE session_id = %s ORDER BY ts", (sid,)).fetchall()]
-    for tech, tactic, conf in conn.execute(
-            "SELECT DISTINCT technique_id, tactic, confidence FROM honeylens.attack_matches WHERE session_id = %s",
+    for rule_id, tech, tactic, conf in conn.execute(
+            "SELECT DISTINCT rule_id, technique_id, tactic, confidence FROM honeylens.attack_matches WHERE session_id = %s",
             (sid,)).fetchall():
+        facts.rule_ids.add(rule_id)
         facts.techniques.add(tech)
         facts.tactics.add(tactic)
         if conf == "high":
@@ -210,9 +257,9 @@ def _summary(meta: dict[str, Any], facts: SessionFacts, result: Any, country: st
     return text
 
 
-def _score(conn: Any, session_ids: list[str], enricher: Enricher) -> None:
+def _score(conn: Any, session_ids: list[str], enricher: Enricher, cfg: ScoringConfig = DEFAULT_CONFIG) -> None:
     for sid in session_ids:
-        facts, meta = _facts(conn, sid)
+        facts, meta = _facts(conn, sid, cfg)
         res = score_session(facts)
         geo = None
         if meta["ip"]:
@@ -238,6 +285,34 @@ def _score(conn: Any, session_ids: list[str], enricher: Enricher) -> None:
         )
 
 
+def _upgrade_burst_neighbours(conn: Any, session_ids: list[str], enricher: Enricher, cfg: ScoringConfig) -> int:
+    """Re-score earlier login-only 'scanner' sessions whose IP just crossed the brute-force threshold.
+
+    Sessions are scored when their events arrive, so the first few connections
+    of a burst were scored before the IP had enough failures. After each batch,
+    for every source IP in it, the still-'scanner' login-only sessions of that IP
+    whose window overlaps the batch are re-scored once. Each session is
+    upgraded at most once (it stops being 'scanner'), so the extra cost is
+    bounded. Uses the (src_ip, start_ts) index from migration 006.
+    """
+    if not cfg.brute_enabled or not session_ids:
+        return 0
+    span = timedelta(minutes=cfg.brute_window_min)
+    rows = conn.execute(
+        "SELECT src_ip, min(start_ts), max(start_ts) FROM honeylens.sessions "
+        "WHERE session_id = ANY(%s) AND src_ip IS NOT NULL AND classification = 'brute-forcer' GROUP BY src_ip",
+        (session_ids,)).fetchall()
+    todo: list[str] = []
+    for ip, lo, hi in rows:
+        todo += [r[0] for r in conn.execute(
+            "SELECT session_id FROM honeylens.sessions WHERE src_ip = %s AND start_ts >= %s AND start_ts <= %s "
+            "AND classification = 'scanner' AND commands_count = 0 AND login_attempts > 0 AND NOT (session_id = ANY(%s))",
+            (ip, lo - span, hi + span, session_ids)).fetchall()]
+    if todo:
+        _score(conn, todo, enricher, cfg)
+    return len(todo)
+
+
 def save_offsets(conn: Any, states: dict[str, FileState]) -> None:
     """Persist file offsets (same transaction as the events)."""
     with conn.cursor() as cur:
@@ -257,7 +332,7 @@ def load_offsets(conn: Any) -> list[tuple[str, str, int, str | None]]:
 
 
 def write_batch(conn: Any, events: list[Event], enricher: Enricher, offsets: dict[str, FileState],
-                source: dict[str, str] | None = None) -> BatchStats:
+                source: dict[str, str] | None = None, cfg: ScoringConfig = DEFAULT_CONFIG) -> BatchStats:
     """Store events + offsets atomically. Caller owns commit/rollback."""
     stats = BatchStats()
     new_uids = _insert_raw(conn, events, source or {})
@@ -266,21 +341,26 @@ def write_batch(conn: Any, events: list[Event], enricher: Enricher, offsets: dic
     stats.duplicates = len(events) - len(new_events)
     if new_events:
         _insert_children(conn, new_events)
-        sids = _upsert_sessions(conn, new_events)
+        sids = _upsert_sessions(conn, new_events, cfg)
         _recount(conn, sids)
-        _score(conn, sids, enricher)
-        stats.sessions_updated = len(sids)
+        _score(conn, sids, enricher, cfg)
+        stats.sessions_updated = len(sids) + _upgrade_burst_neighbours(conn, sids, enricher, cfg)
     save_offsets(conn, offsets)
     return stats
 
 
-def recompute_all(conn: Any, enricher: Enricher) -> int:
-    """Rebuild counts/scores for every session (after rule changes)."""
+def recompute_all(conn: Any, enricher: Enricher, cfg: ScoringConfig = DEFAULT_CONFIG) -> int:
+    """Rebuild counts/scores for every session (after rule changes).
+
+    Kept for ``honeylens-pipeline --recompute``. It only re-scores; the full
+    backfill (re-matching commands against the current rules, refreshing the
+    ignore flag) is ``honeylens-rescore``.
+    """
     sids = [r[0] for r in conn.execute("SELECT session_id FROM honeylens.sessions").fetchall()]
     groups: dict[int, list[str]] = defaultdict(list)
     for i, sid in enumerate(sids):
         groups[i // 500].append(sid)
     for chunk in groups.values():
         _recount(conn, chunk)
-        _score(conn, chunk, enricher)
+        _score(conn, chunk, enricher, cfg)
     return len(sids)
