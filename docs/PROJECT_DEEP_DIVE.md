@@ -2,7 +2,8 @@
 
 This guide explains what the repository implements, how its services fit together, and what has
 and has not been verified. The screenshots and checked-in sample exports are **SIMULATED** data.
-This workspace has no verified real attacker dataset or cloud deployment.
+The cloud deployment is verified on Azure for Students and collects real attacker data; real
+findings are not published in the repository yet (privacy review first).
 
 ## Executive summary
 
@@ -14,8 +15,9 @@ scheduled report make that data easier to review.
 
 It is designed for learning and controlled observation. Cowrie emulates a shell; it does not give
 attackers a real Linux machine. Included personas and examples use documentation IP ranges and
-reserved domains. A laptop run is private. A public cloud deployment is a separate, **UNVERIFIED**
-operation that requires provider-side isolation and firewall checks.
+reserved domains. A laptop run is private. A public cloud deployment is a separate operation that
+requires provider-side isolation and firewall checks; it has been done and verified on Azure for
+Students (other providers untested).
 
 ## The problem
 
@@ -130,7 +132,7 @@ statically by unit tests, and the CI integration job checks from the host that 1
   and configuration volumes are constrained. The pipeline mounts evidence read-only.
 - Cloud Cowrie uses a fixed bridge subnet, with `DOCKER-USER` and host `INPUT` rules blocking new
   outbound connections. The deployment guide now instructs operators to apply those rules before
-  starting the public service. The actual cloud behavior remains **UNVERIFIED** until run on a VM.
+  starting the public service. On the deployed Azure VM `deploy/verify-egress.sh` printed PASS.
 
 ### Secrets and hostile input
 
@@ -304,14 +306,14 @@ and drop database rights. Results, with the machine they were measured on, are k
   to execute real attacker payloads.
 - A single honeypot sees only traffic that chooses its address and is subject to honeypot bias.
 - Screenshots, committed sample reports, and synthetic events are **SIMULATED**, not observed
-  attacks. No real session count is verified here.
+  attacks. Real data from the cloud deployment is not committed (privacy review first).
 - Regex ATT&CK matching and heuristic severity can miss behavior or overstate it. Technique
   mapping is not attribution or proof of an actor.
 - GeoIP/ASN describe network registration and routing ownership, not a person or group.
 - Enabling IPInfo shares public source IP addresses with that third party.
-- Cloud firewall rules, the boot-time lockdown unit and cloud billing have not been verified on a
-  real VM. Docker routing, migrations, role behavior and the full integration run are covered by
-  hosted CI.
+- The cloud firewall rules and lockdown unit are verified on one Azure for Students VM; Oracle and
+  AWS are untested. Re-run `deploy/verify-egress.sh` after every reboot. Docker routing,
+  migrations, role behavior and the full integration run are covered by hosted CI.
 
 ## Real-world applications
 
@@ -380,12 +382,12 @@ committed in the same transaction as event inserts. On failure the transaction r
 the previous offset available for retry.
 
 **Are the screenshots evidence of real attacks?** No. The checked-in samples are marked simulated
-and use documentation IPs and reserved domains. Real cloud observations have not been verified in
-this workspace.
+and use documentation IPs and reserved domains. Real cloud observations exist but are not
+committed.
 
-**What is the most important remaining validation?** Verify cloud egress blocking
-(`deploy/verify-egress.sh`, including after a reboot with the systemd unit) on the actual target
-provider before exposing Cowrie publicly. The Docker/PostgreSQL suite already runs in hosted CI.
+**What is the most important remaining validation?** Re-check cloud egress blocking
+(`deploy/verify-egress.sh`) after every reboot and on any new provider before exposing Cowrie
+publicly. The Docker/PostgreSQL suite already runs in hosted CI.
 
 ## Verification status
 
@@ -394,7 +396,7 @@ provider before exposing Cowrie publicly. The Docker/PostgreSQL suite already ru
   Trivy, the full Docker integration test (including host-side checks that 127.0.0.1:3000 and
   127.0.0.1:2222 answer); and a full-history Gitleaks scan with a canary.
 * **Measured with retained details:** pipeline throughput ([BENCHMARKS.md](BENCHMARKS.md)).
-* **Not yet verified:** cloud deployment, cloud egress blocking and the boot-time lockdown unit on
-  a real VM, and any real (non-simulated) attacker data.
-
-The pre-release audit notes are kept, as historical records, in [archive/](archive/).
+* **Verified on a real VM:** cloud deployment on Azure for Students (Standard B2ats_v2, Ubuntu
+  24.04), egress lockdown (`verify-egress.sh` PASS), admin SSH over Tailscale, real attacker data
+  collected since 11 October 2026.
+* **Not yet verified:** the Oracle Cloud and AWS instructions.

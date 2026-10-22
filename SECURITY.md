@@ -68,7 +68,7 @@ SETGID) to fix folder ownership before dropping to the `postgres` user; only tho
 * **No attribution claims, no hack-back.** GeoIP shows where an IP is registered, not who the
   attacker is; the report says so. IOCs are labelled low-confidence.
 
-## 7. Cloud (not yet tested on a real VM)
+## 7. Cloud (verified on Azure for Students)
 
 Dedicated account/compartment/VPC with nothing else in it; only Cowrie (port 22) is public; admin
 SSH moved to port 22022 (keys only) and reached over Tailscale or a cloud bastion with no public
@@ -77,7 +77,8 @@ Grafana is reached through an SSH tunnel. Cowrie egress (to the Internet, other 
 itself) is dropped by `deploy/egress-lockdown.sh` (IPv4, plus IPv6 when ip6tables is available),
 re-applied before Docker on every boot by `deploy/honeylens-egress-lockdown.service`, and proven with
 `deploy/verify-egress.sh`, which uses only local targets. `cowrie_net` also has IP masquerading off,
-so Cowrie has no outbound NAT even if the firewall rules are missing. See DEPLOY_CLOUD.md.
+so Cowrie has no outbound NAT even if the firewall rules are missing. This setup runs on an Azure for
+Students VM, where `verify-egress.sh` printed PASS; other providers are untested. See DEPLOY_CLOUD.md.
 
 ## 8. Secret exposure in evidence and the release ZIP
 

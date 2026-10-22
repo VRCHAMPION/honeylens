@@ -1,11 +1,11 @@
 # Deploy HoneyLens to the cloud (real attackers)
 
-> **Status: not yet run on a real cloud VM.** In the current workspace audit, Docker and ShellCheck
-> were unavailable, so the merged Compose configuration, port checker, and firewall scripts could
-> not be rerun. Treat the deployment steps as **UNVERIFIED** until those checks pass in a suitable
-> environment.
-> Free-tier facts below were read from the official Oracle and AWS pages on **7 October 2026**;
-> providers change them, so re-check before you sign up.
+> **Status: VERIFIED on Azure for Students** (running since 11 October 2026). HoneyLens runs on a
+> `Standard B2ats_v2` VM (2 vCPU, 1 GiB RAM, x64) with Ubuntu 24.04: Cowrie is the only public
+> service (TCP 22), admin SSH is on 22022 over Tailscale, `deploy/verify-egress.sh` printed PASS,
+> Grafana and PostgreSQL are private, and real attacker data is being collected.
+> The Oracle Cloud and AWS sections below are **untested alternatives**; their free-tier facts were
+> read from the official pages on **7 October 2026** and providers change them, so re-check first.
 
 **Goal:** a small VM that exposes ONLY the fake SSH server to the internet, with everything else
 closed to the public Internet, isolated in its own account area, with a budget alarm, backups and
@@ -25,10 +25,10 @@ works when Tailscale or the bastion is unavailable, and as the lockout-recovery 
 
 ```mermaid
 flowchart LR
-    I((Internet attackers)) -->|TCP 22| FW[Cloud firewall<br/>Security List / Security Group]
+    I((Internet attackers)) -->|TCP 22| FW[Cloud firewall<br/>NSG / Security List / Security Group]
     you((You)) -->|"Tailscale (no public port)"| TS[tailscale0]
     subgraph VCN["Dedicated compartment + VCN/VPC (nothing else inside)"]
-      FW --> VM[Ubuntu 24.04 VM<br/>Always Free Ampere A1]
+      FW --> VM[Ubuntu 24.04 VM<br/>deployed: Azure B2ats_v2]
       subgraph VM
         C[Cowrie container :2222<br/>published as :22<br/>egress DROPPED]
         P[pipeline] --- DB[(PostgreSQL<br/>no published port)]
@@ -53,7 +53,65 @@ flowchart LR
 5. Check your provider's acceptable-use policy. Running a honeypot is normally allowed;
    attacking back is not, and HoneyLens never does it.
 
-## Option A (recommended): Oracle Cloud Infrastructure (OCI) Always Free
+## Deployed setup: Azure for Students
+
+This is the configuration HoneyLens actually runs on. Azure for Students needs a school e-mail
+address and **no payment card**, and comes with a limited credit, so it suits students without a
+card. The steps are the same as the Oracle walkthrough below; only the cloud-console parts differ.
+
+| Oracle step | What was done on Azure |
+|---|---|
+| 0-3 Account, MFA, budget | Azure for Students subscription (school e-mail, no card); MFA on; watch the remaining credit under Cost Management |
+| 1 Region | Student subscriptions only allow some regions (a region policy blocks the rest). If "Create VM" fails with a policy error, pick another allowed region |
+| 4 Compartment | a dedicated **resource group** (`honeylens`) holding nothing else |
+| 5 Network | the VM's own VNet + **Network Security Group (NSG)**. While setting up, the inbound TCP 22 rule has source **My IP**. After admin SSH has moved to 22022 over Tailscale (step 7), change the TCP 22 rule source to **Any** - that port now belongs to Cowrie. No inbound rule for 22022, 3000 or 5432 |
+| 6 VM | `Standard B2ats_v2` (2 vCPU, 1 GiB RAM), image Ubuntu Server 24.04 LTS x64, SSH public key login, default user `azureuser` (use it wherever the steps say `ubuntu`) |
+| 6 Memory | 1 GiB is tight: add swap before Docker (`sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile && echo '/swapfile none swap sw 0 0' \| sudo tee -a /etc/fstab`), keep `HL_BATCH_SIZE` small (200-500) and stop Grafana when not in use (`docker compose stop grafana`) |
+| 7-14 | identical: Tailscale admin SSH on 22022, Docker, `check_ports --cloud`, egress lockdown unit, `verify-egress.sh` PASS, Grafana over an SSH tunnel, backups, retention, monitoring |
+| 15 Teardown | back up, then delete the whole `honeylens` resource group (VM, disk, NIC, public IP, NSG go with it) |
+
+## Updating a running deployment
+
+From `~/honeylens` on the VM (pull, rebuild the image, apply any new database migration, restart):
+
+```bash
+cd ~/honeylens
+git pull
+docker compose -f docker-compose.yml -f docker-compose.cloud.yml build
+docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d    # the one-shot migrate service runs first
+docker compose -f docker-compose.yml -f docker-compose.cloud.yml ps       # migrate: exited (0); others healthy
+```
+
+After a release that changes detection rules or scoring, bring the sessions already stored up to
+date. `honeylens-rescore` re-matches the stored commands, recomputes class, severity, reasons and the
+ignore list in batches of 500, never changes raw data, and is safe to run while the pipeline is
+live. Preview first:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.cloud.yml exec pipeline honeylens-rescore --dry-run
+docker compose -f docker-compose.yml -f docker-compose.cloud.yml exec pipeline honeylens-rescore --progress
+```
+
+`--since 2026-10-01` or `--since 7d` limits it to recent sessions. Running it twice changes nothing
+the second time.
+
+### Ignore your own test IPs (`HL_IGNORE_IPS`)
+
+Add the public IPs of machines you test from (your home connection, a scanner VM) to `.env`,
+comma-separated; CIDRs work too:
+
+```bash
+HL_IGNORE_IPS=203.0.113.10,198.51.100.20
+HL_SENSOR_IP=<the VM's public IP>     # optional: never exported as an IOC
+```
+
+Restart so the containers read it (`... up -d`), then run `honeylens-rescore` once so sessions
+recorded before the change are flagged too. Ignored sessions stay in the database (nothing is
+deleted) but are left out of the weekly report, the IOC CSV/STIX exports and every Grafana panel.
+For your own SQL, `honeylens.real_sessions` is the session table without simulated or ignored
+sessions.
+
+## Alternative (untested): Oracle Cloud Infrastructure (OCI) Always Free
 
 ### 0. What "Always Free" gives you today (official docs, checked 7 Oct 2026)
 
@@ -306,7 +364,7 @@ docker compose -f docker-compose.yml -f docker-compose.cloud.yml down -v
 Then in the console: terminate the instance (**delete the boot volume** too), delete the VCN,
 delete the budget, delete the `honeylens` compartment. Check Billing → Cost Analysis shows 0.
 
-## Option B: AWS Free Tier alternative
+## Alternative (untested): AWS Free Tier
 
 **Current Free Tier caveats (official [AWS Free Tier FAQ](https://aws.amazon.com/free/free-tier-faqs/), checked 7 Oct 2026):**
 
@@ -345,7 +403,7 @@ delete the budget, delete the `honeylens` compartment. Check Billing → Cost An
 | Steps 7-15 | identical (move SSH, Docker, cloud compose, egress lockdown, tunnel, backups, retention, monitoring with CloudWatch, teardown: terminate instance + delete volume, VPC, budget) |
 
 Free-tier terms change over time - check the current AWS Free Tier page before creating anything.
-Option B has not been tested on AWS yet.
+The AWS alternative has not been tested.
 
 ## Checklist after deploying
 

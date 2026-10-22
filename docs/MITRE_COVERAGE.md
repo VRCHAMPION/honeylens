@@ -7,7 +7,7 @@ recognise in attacker commands. **Why:** mapping raw commands to a shared vocabu
 your honeypot with threat reports and explain findings in a SOC (Security Operations Centre).
 
 * ATT&CK version: **Enterprise v19.2** (official STIX, SHA-256 `dc1639caa5501d720e280cf1cbd8fbe009884a0c9b3e6e9ed9d0c25166c3d8f4`)
-* Rules: **60** across **9 tactics**
+* Rules: **70** across **9 tactics**
 * Distinct techniques covered: **45**
 * Coverage: **8.2%** of the 552 active (not revoked/deprecated)
   techniques in the tactics we cover. Most of the rest are Windows/cloud/network techniques an SSH
@@ -21,15 +21,15 @@ T1496.001 Compute Hijacking under **Impact**.
 
 | Tactic | ID | Rules |
 |---|---|---|
-| command-and-control | TA0011 | 6 |
+| command-and-control | TA0011 | 8 |
 | credential-access | TA0006 | 4 |
 | defense-impairment | TA0112 | 5 |
-| discovery | TA0007 | 14 |
-| execution | TA0002 | 7 |
+| discovery | TA0007 | 19 |
+| execution | TA0002 | 8 |
 | impact | TA0040 | 5 |
 | persistence | TA0003 | 8 |
 | reconnaissance | TA0043 | 3 |
-| stealth | TA0005 | 8 |
+| stealth | TA0005 | 10 |
 
 ## All rules
 
@@ -49,6 +49,11 @@ T1496.001 Compute Hijacking under **Impact**.
 | HL-DISC-012 | T1083 File and Directory Discovery | discovery | medium | Listing writable or sensitive folders shows where to drop tools or what credentials exist. |
 | HL-DISC-013 | T1518 Software Discovery | discovery | high | Checking which download tools or compilers exist decides how the next payload will be fetched. |
 | HL-DISC-014 | T1082 System Information Discovery | discovery | medium | GPU checks are typical of miners deciding whether GPU mining is possible. |
+| HL-DISC-015 | T1016 System Network Configuration Discovery | discovery | medium | MikroTik RouterOS console commands such as "/ip cloud print" list the router's addresses and public DNS name. Bots try them on every SSH box in case it is a router. |
+| HL-DISC-016 | T1082 System Information Discovery | discovery | medium | RouterOS "/system resource print" and friends report the router model, CPU and version (System Information Discovery). |
+| HL-DISC-017 | T1057 Process Discovery | discovery | medium | A bare "ps" (often piped into grep for "miner") lists running processes, here to spot a rival cryptominer. |
+| HL-DISC-018 | T1083 File and Directory Discovery | discovery | medium | Looking for Telegram Desktop session folders (tdata, D877F783D5D3EF8C) and GSM/SMS modem devices is file and directory discovery aimed at accounts to steal or SMS gateways to abuse. |
+| HL-DISC-019 | T1083 File and Directory Discovery | discovery | low | locate searches the file-name index to find interesting files quickly (File and Directory Discovery). |
 | HL-EXEC-001 | T1059.004 Unix Shell | execution | high | Running a script or a -c string through a Unix shell is the core Unix Shell execution technique. |
 | HL-EXEC-002 | T1059.004 Unix Shell | execution | high | Piping downloaded text straight into a shell ("curl ... / sh") executes code without saving it first. |
 | HL-EXEC-003 | T1059.004 Unix Shell | execution | high | Making a file executable and running it immediately is the classic loader pattern. |
@@ -56,6 +61,7 @@ T1496.001 Compute Hijacking under **Impact**.
 | HL-EXEC-005 | T1059.004 Unix Shell | execution | medium | Running a binary from the current folder usually means running a freshly dropped payload. |
 | HL-EXEC-006 | T1059.004 Unix Shell | execution | low | nohup/setsid keep a payload running after the attacker disconnects. |
 | HL-EXEC-007 | T1059.004 Unix Shell | execution | medium | IoT (Internet of Things) bots like Mirai call commands through busybox because cheap devices have nothing else. |
+| HL-EXEC-008 | T1059.004 Unix Shell | execution | high | A download tool whose output is piped straight into a shell fetches and runs a payload in one step (download-and-execute dropper). |
 | HL-PERS-001 | T1098.004 SSH Authorized Keys | persistence | high | Writing an attacker key into authorized_keys gives password-less access forever, even after a password change. |
 | HL-PERS-002 | T1098.004 SSH Authorized Keys | persistence | high | Making .ssh immutable stops the owner (or other malware) from removing the attacker's key. |
 | HL-PERS-003 | T1053.003 Cron | persistence | high | Writing a cron job re-launches the payload every few minutes or at reboot. |
@@ -85,6 +91,8 @@ T1496.001 Compute Hijacking under **Impact**.
 | HL-C2-004 | T1095 Non-Application Layer Protocol | command-and-control | high | netcat or socat with -e/exec wires a shell to a network socket. |
 | HL-C2-005 | T1572 Protocol Tunneling | command-and-control | medium | SSH -D/-R/-L flags build tunnels or SOCKS proxies through the victim. |
 | HL-C2-006 | T1071.001 Web Protocols | command-and-control | low | HTTP POST from a shell is often a bot checking in with its controller over web protocols. |
+| HL-C2-007 | T1105 Ingress Tool Transfer | command-and-control | high | scp with an identity file (-i, often a private key the bot just echoed into a file) pulling user@host:path copies the attacker's payload onto the host (Ingress Tool Transfer). |
+| HL-C2-008 | T1105 Ingress Tool Transfer | command-and-control | high | The command "scp -t" is the receiving end of an scp upload - the attacker is pushing a file onto the honeypot from their own machine. |
 | HL-IMPACT-001 | T1496.001 Compute Hijacking | impact | high | These are well-known cryptocurrency miner programs; running them steals CPU (Compute Hijacking). |
 | HL-IMPACT-002 | T1496.001 Compute Hijacking | impact | high | stratum:// URLs and typical pool ports are the mining protocol, even when the miner binary is renamed. |
 | HL-IMPACT-003 | T1496.001 Compute Hijacking | impact | medium | Enabling huge pages and the msr module are XMRig tuning steps that boost mining speed. |
@@ -95,6 +103,8 @@ T1496.001 Compute Hijacking under **Impact**.
 | HL-RECON-003 | T1595.002 Vulnerability Scanning | reconnaissance | medium | Brute-force and service-scanning tools installed on the honeypot mean it is being turned into a scanner. |
 | HL-STEALTH-007 | T1497.001 System Checks | stealth | medium | Checking for virtual machines, containers or honeypot names is sandbox evasion (System Checks). |
 | HL-STEALTH-008 | T1027 Obfuscated Files or Information | stealth | medium | Hex-escaped echo/printf strings hide binary payloads or signatures inside text (Obfuscation). Mirai variants also use it as a liveness probe. |
+| HL-STEALTH-009 | T1497.001 System Checks | stealth | high | The "shell behaviour" probe runs a made-up command (xxxxxx, ./xxxxxx) and a tiny script named filter, then compares the error messages and output with a real shell. Emulated shells such as honeypots answer differently, so this is a honeypot/sandbox check (System Checks). |
+| HL-STEALTH-010 | T1497.001 System Checks | stealth | low | Piping a short word through "cat -n" checks that pipes and line numbering behave like a real shell - a cheap liveness/honeypot check seen from SSH bots. |
 
 ## How the rules are kept honest (all automated in `tests/test_rules.py`)
 

@@ -53,7 +53,8 @@ did not recognise the command), mapped (TRUE = at least one ATT&CK rule matched)
 
 event_uid, session_id, ts, src_ip, url, url_host, shasum (SHA-256 if Cowrie recorded one), outfile,
 eventid (`cowrie.session.file_download[.failed]` / `file_upload`), is_simulated.
-Rows with an empty `url` are files written by shell redirection, not downloads.
+Rows with an empty `url` are files written by shell redirection, not downloads. For scp uploads
+Cowrie puts a local path (e.g. `/home/pi/x`) in `url`; reports export those as `file-path`, not URLs.
 
 ## attack_matches
 
@@ -79,6 +80,13 @@ sessions_updated, batch_ms, lag_bytes (unread bytes in tracked files), files_tra
 file_key (PK, `device:inode`), path (latest name), byte_offset, head_hash (SHA-256 of the first 64
 bytes, detects inode reuse), updated_at.
 
+## ignored_sessions (migration 006)
+
+session_id (PK, FK → sessions, cascade delete), src_ip, reason (`HL_IGNORE_IPS`), ignored_at.
+Sessions from the operator's own IPs. They stay in every other table but reports, IOC exports and
+dashboards filter them out with `session_id NOT IN (SELECT session_id FROM honeylens.ignored_sessions)`.
+Filled at ingest; `honeylens-rescore` adds and removes rows when `HL_IGNORE_IPS` changes.
+
 ## schema_migrations
 
 version (file name), checksum (SHA-256 of the file), applied_at.
@@ -91,6 +99,7 @@ version (file name), checksum (SHA-256 of the file), applied_at.
 | `v_credentials` | username/password pairs with counts |
 | `v_session_overview` | sessions joined with summaries |
 | `v_attack_daily` | technique counts per day |
+| `real_sessions` | `sessions` without simulated sessions and without ignored sessions (internet attackers only) |
 | `apply_retention(keep_days)` | deletes data older than N days, returns rows deleted per table; ≤0 disables |
 
 ## Roles

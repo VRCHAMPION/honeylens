@@ -124,7 +124,7 @@ erDiagram
 
 Full column list: [DATA_DICTIONARY.md](DATA_DICTIONARY.md).
 
-## 4. Cloud isolation (UNVERIFIED - see DEPLOY_CLOUD.md)
+## 4. Cloud isolation (verified on Azure for Students - see DEPLOY_CLOUD.md)
 
 ```mermaid
 flowchart TB
@@ -132,7 +132,7 @@ flowchart TB
       subgraph comp["Dedicated compartment 'honeylens' (nothing else)"]
         subgraph vcn["Dedicated VCN / VPC"]
           SL{{"Security List / Security Group<br/>IN: 22/tcp from anywhere (Cowrie)<br/>no public rule for 22022<br/>(fallback only: 22022 from YOUR IP)"}}
-          subgraph vm["VM (Ampere A1, Ubuntu 24.04)"]
+          subgraph vm["VM (deployed: Azure B2ats_v2, Ubuntu 24.04)"]
             sshd["real sshd :22022<br/>keys only, no root<br/>allowed on tailscale0 / from bastion"]
             cow["Cowrie :2222 published as :22<br/>subnet 172.31.250.0/24"]
             ipt["iptables DOCKER-USER + INPUT:<br/>DROP NEW from 172.31.250.0/24 / hl-cowrie0"]
