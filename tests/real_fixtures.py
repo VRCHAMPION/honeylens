@@ -55,6 +55,29 @@ UNMAPPED_REAL = {
 # SSH key persistence (correctly high before the fix; must stay high).
 AUTHORIZED_KEYS = ("cd ~ && rm -rf .ssh && mkdir .ssh && echo \"ssh-rsa AAAAB3NzaC1yc2EREDACTED mdrfckr\" >> .ssh/authorized_keys "
                    "&& chmod -R go= ~/.ssh && cd ~")
+# The 19-command key-planting bot session (3 real sessions scored 57/high with techniques
+# T1007, T1033, T1059.004, T1082, T1098, T1098.004). Command list reconstructed to give the same techniques.
+KEY_BOT_SESSION = [
+    "cat /proc/cpuinfo | grep name | wc -l",
+    "echo \"admin:REDACTED\"|chpasswd|bash",
+    "cat /proc/cpuinfo | grep name | head -n 1 | awk '{print $4,$5,$6,$7,$8,$9;}'",
+    "free -m | grep Mem | awk '{print $2 ,$3, $4, $5, $6, $7}'",
+    "ls -lh $(which ls)",
+    "which ls",
+    "crontab -l",
+    "w",
+    "uname -m",
+    "cat /proc/cpuinfo | grep model | grep name | wc -l",
+    "top",
+    "uname",
+    "uname -a",
+    "whoami",
+    "lscpu | grep Model",
+    "df -h | head -n 2 | awk 'FNR == 2 {print $2;}'",
+    AUTHORIZED_KEYS,
+    "lockr -ia .ssh",
+    "cat /proc/cpuinfo | grep name | wc -l",
+]
 
 # scp upload: Cowrie logs the attacker pushing a file; the "url" is a local path.
 SCP_UPLOAD_CMD = "scp -t /tmp/9VyqwU5Z"

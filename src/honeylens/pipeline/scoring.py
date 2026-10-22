@@ -22,12 +22,19 @@ POINTS = {
     "per_tactic": 5,  # capped at TACTIC_CAP
     "high_confidence_technique": 3,  # per distinct technique, capped at HIGH_CAP
     "download_attempt": 15,
+    "download_execute": 25,  # fetch + run in one go (curl|sh, scp -i key pull, chmod +x after a fetch)
+    "ip_brute_force": 5,  # login-only session that is part of a per-IP brute-force burst
     "persistence": 10,
     "defense_impairment": 10,
     "resource_hijacking": 15,
     "data_destruction": 15,
 }
 FAILED_CAP, COMMAND_CAP, TACTIC_CAP, HIGH_CAP = 10, 10, 25, 15
+
+# Rules whose match on their own means "download AND execute" (see rules.yaml).
+DOWNLOAD_EXECUTE_RULES = frozenset({"HL-EXEC-008", "HL-C2-007"})
+# chmod +x / ./run rules: download-and-execute only together with a fetch (T1105 or a recorded download).
+EXEC_AFTER_FETCH_RULES = frozenset({"HL-EXEC-003"})
 
 CLASSES = (
     "cryptominer-like",
@@ -53,6 +60,12 @@ class SessionFacts:
     high_conf_techniques: set[str] = field(default_factory=set)
     tactics: set[str] = field(default_factory=set)
     client_version: str = ""
+    rule_ids: set[str] = field(default_factory=set)
+    # Failed logins from this session's source IP, across ALL its sessions, inside
+    # the per-IP brute-force window (filled by the store; 0 = not computed).
+    ip_window_failures: int = 0
+    ip_brute_threshold: int = 0  # 0 = per-IP brute-force detection off
+    ip_window_minutes: int = 0
 
 
 @dataclass
@@ -101,17 +114,49 @@ def actor_type(facts: SessionFacts) -> tuple[str, float | None]:
     return "unknown", round(median, 3)
 
 
+def ip_brute_force(facts: SessionFacts) -> bool:
+    """True if this login-only session is part of a per-IP brute-force burst.
+
+    Real SSH bots open a NEW connection for every password guess, so one session
+    holds only one failed login. Looking at a single session they look like
+    scanners; looking at the source IP over a time window they are clearly
+    guessing passwords.
+    """
+    return (
+        facts.ip_brute_threshold > 0
+        and not facts.command_ts
+        and (facts.login_failures > 0 or facts.login_success)
+        and facts.ip_window_failures >= facts.ip_brute_threshold
+    )
+
+
+def download_execute(facts: SessionFacts) -> bool:
+    """True if the session fetched a payload AND ran it (curl|sh, scp -i pull, chmod +x after a fetch)."""
+    if facts.rule_ids & DOWNLOAD_EXECUTE_RULES:
+        return True
+    fetched = facts.downloads > 0 or "T1105" in facts.techniques
+    return fetched and bool(facts.rule_ids & EXEC_AFTER_FETCH_RULES)
+
+
 def classify(facts: SessionFacts) -> str:
-    """Pick ONE behaviour class, checking the most specific first."""
+    """Pick ONE behaviour class, checking the most specific first.
+
+    Priority: cryptominer > dropper > honeypot-prober > intruder > brute-forcer >
+    scanner. A session that probes for a honeypot AND drops malware is a dropper.
+    A high-confidence probe rule (the shell-behaviour probe family) makes a
+    prober however many commands ran; a weaker System Checks hit only counts
+    for short sessions (<= 6 commands).
+    """
     if "T1496.001" in facts.techniques or "T1496" in facts.techniques:
         return "cryptominer-like"
     if facts.downloads > 0 or "T1105" in facts.techniques:
         return "malware-dropper"
-    if "T1497.001" in facts.techniques and len(facts.command_ts) <= 6:
+    if "T1497.001" in facts.high_conf_techniques or (
+            "T1497.001" in facts.techniques and len(facts.command_ts) <= 6):
         return "honeypot-prober"
     if facts.login_success and facts.command_ts:
         return "intruder"
-    if facts.login_failures >= 3:
+    if facts.login_failures >= 3 or ip_brute_force(facts):
         return "brute-forcer"
     if not facts.command_ts and facts.login_failures + int(facts.login_success) <= 2:
         return "scanner"
@@ -150,6 +195,11 @@ def score_session(facts: SessionFacts) -> ScoreResult:
     )
     if facts.downloads:
         add("download_attempt", POINTS["download_attempt"], f"{facts.downloads} download attempts")
+    if download_execute(facts):
+        add("download_execute", POINTS["download_execute"], "fetched a payload and ran it (download-and-execute)")
+    if ip_brute_force(facts):
+        add("ip_brute_force", POINTS["ip_brute_force"],
+            f"source IP made {facts.ip_window_failures} failed logins within +/-{facts.ip_window_minutes} min across sessions")
     if "persistence" in facts.tactics:
         add("persistence", POINTS["persistence"], "tried to survive reboot / keep access")
     if "defense-impairment" in facts.tactics:
