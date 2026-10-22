@@ -36,6 +36,10 @@ x-hl-env: &hl-env
   HL_DB_HOST: postgres
   HL_DB_PORT: "5432"
   HL_LOG_LEVEL: ${HL_LOG_LEVEL:-INFO}
+  # Your own test/admin IPs (kept, but hidden from reports, IOCs and dashboards)
+  # and the honeypot's own public IP (never exported as an IOC). See .env.example.
+  HL_IGNORE_IPS: ${HL_IGNORE_IPS:-}
+  HL_SENSOR_IP: ${HL_SENSOR_IP:-}
   TZ: UTC
 
 services:
@@ -142,6 +146,8 @@ services:
       HL_ENRICH_CACHE_DAYS: ${HL_ENRICH_CACHE_DAYS:-30}
       HL_ENRICH_API_MAX_PER_MINUTE: ${HL_ENRICH_API_MAX_PER_MINUTE:-30}
       HL_ENRICH_API_TIMEOUT_S: ${HL_ENRICH_API_TIMEOUT_S:-3}
+      HL_BRUTE_WINDOW_MIN: ${HL_BRUTE_WINDOW_MIN:-60}
+      HL_BRUTE_MIN_FAILURES: ${HL_BRUTE_MIN_FAILURES:-20}
     volumes:
       - cowrie_var:/cowrie-var:ro     # read-only: the pipeline can never alter evidence
       - hl_synthetic:/synthetic:ro

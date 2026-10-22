@@ -21,11 +21,14 @@ DS = {"type": "grafana-postgresql-datasource", "uid": "honeylens-pg"}
 # but a crafted dashboard URL (?var-data=...) can set any text, so the value is
 # always interpolated with Grafana's :sqlstring format (quoted + escaped).
 SIM = "(${data:sqlstring} = 'all' OR {col} = (${data:sqlstring} = 'simulated'))"
+# Sessions from the operator's own IPs (HL_IGNORE_IPS) are hidden from every
+# panel whatever the Data filter. The ignore list is tiny, so this is one hash.
+NOT_IGNORED = "session_id NOT IN (SELECT session_id FROM honeylens.ignored_sessions)"
 
 
 def sim(col: str = "is_simulated") -> str:
-    """SQL condition for the $data filter on a given column."""
-    return SIM.replace("{col}", col)
+    """SQL condition for the $data filter on a given column, plus the ignore list."""
+    return SIM.replace("{col}", col) + f" AND {NOT_IGNORED}"
 
 
 class Board:
@@ -89,7 +92,7 @@ class Board:
             "SELECT CASE WHEN count(*) = 0 THEN 'NO DATA' "
             "WHEN bool_and(is_simulated) THEN 'SIMULATED' WHEN NOT bool_or(is_simulated) THEN 'REAL' "
             "ELSE 'MIXED · ' || round(100.0 * count(*) FILTER (WHERE is_simulated) / count(*)) || '% SIM' END AS \"DATA MODE\" "
-            "FROM honeylens.sessions WHERE $__timeFilter(start_ts)"), 6, 2,
+            f"FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND {NOT_IGNORED}"), 6, 2,
             description="Computed from the sessions in the time range (ignores the Data filter). "
                         "SIMULATED = made by the HoneyLens simulator; REAL = internet attackers.",
             fieldConfig={"defaults": {"color": {"mode": "fixed", "fixedColor": "text"}, "mappings": [
@@ -107,6 +110,7 @@ class Board:
             "border-left:3px solid #b45309;padding:2px 8px'>"
             "Simulated = RFC 5737 documentation IPs, private Docker addresses or the synthetic generator "
             "(never real attackers). Filter with <b>Data</b> = all / real / simulated. "
+            "Your own test IPs (HL_IGNORE_IPS) are always hidden. "
             "Times in IST (Asia/Kolkata); stored in UTC.</div>"), 18, 2)
 
     def to_json(self) -> dict:
@@ -213,7 +217,8 @@ def creds_commands() -> Board:
     b.add("barchart", "SSH client software", f"SELECT coalesce(nullif(client_version,''),'(none)') AS \"Client\", count(*) AS \"Sessions\" "
           f"{S_WHERE} GROUP BY 1 ORDER BY 2 DESC LIMIT 10", 12, 9, options={"xField": "Client", "orientation": "horizontal"})
     b.add("table", "Download attempts (never fetched)", f"SELECT url AS \"URL\", url_host AS \"Host\", count(*) AS \"Attempts\" "
-          f"FROM honeylens.downloads WHERE $__timeFilter(ts) AND {sim()} AND url <> '' GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15", 12, 9)
+          f"FROM honeylens.downloads WHERE $__timeFilter(ts) AND {sim()} AND url ~* '^[a-z][a-z0-9+.-]*://' "
+          f"GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15", 12, 9)
     return b
 
 

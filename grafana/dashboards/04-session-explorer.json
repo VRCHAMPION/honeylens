@@ -52,7 +52,7 @@
           "type": "grafana-postgresql-datasource",
           "uid": "honeylens-pg"
         },
-        "query": "SELECT session_id FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) ORDER BY severity DESC NULLS LAST, start_ts DESC LIMIT 300",
+        "query": "SELECT session_id FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) AND session_id NOT IN (SELECT session_id FROM honeylens.ignored_sessions) ORDER BY severity DESC NULLS LAST, start_ts DESC LIMIT 300",
         "refresh": 2,
         "includeAll": false,
         "sort": 0,
@@ -86,7 +86,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT CASE WHEN count(*) = 0 THEN 'NO DATA' WHEN bool_and(is_simulated) THEN 'SIMULATED' WHEN NOT bool_or(is_simulated) THEN 'REAL' ELSE 'MIXED \u00b7 ' || round(100.0 * count(*) FILTER (WHERE is_simulated) / count(*)) || '% SIM' END AS \"DATA MODE\" FROM honeylens.sessions WHERE $__timeFilter(start_ts)"
+          "rawSql": "SELECT CASE WHEN count(*) = 0 THEN 'NO DATA' WHEN bool_and(is_simulated) THEN 'SIMULATED' WHEN NOT bool_or(is_simulated) THEN 'REAL' ELSE 'MIXED \u00b7 ' || round(100.0 * count(*) FILTER (WHERE is_simulated) / count(*)) || '% SIM' END AS \"DATA MODE\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND session_id NOT IN (SELECT session_id FROM honeylens.ignored_sessions)"
         }
       ],
       "fieldConfig": {
@@ -158,7 +158,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "<div style='font-family:monospace;font-size:12px;line-height:1.5;color:#c7ccd6;border-left:3px solid #b45309;padding:2px 8px'>Simulated = RFC 5737 documentation IPs, private Docker addresses or the synthetic generator (never real attackers). Filter with <b>Data</b> = all / real / simulated. Times in IST (Asia/Kolkata); stored in UTC.</div>"
+        "content": "<div style='font-family:monospace;font-size:12px;line-height:1.5;color:#c7ccd6;border-left:3px solid #b45309;padding:2px 8px'>Simulated = RFC 5737 documentation IPs, private Docker addresses or the synthetic generator (never real attackers). Filter with <b>Data</b> = all / real / simulated. Your own test IPs (HL_IGNORE_IPS) are always hidden. Times in IST (Asia/Kolkata); stored in UTC.</div>"
       }
     },
     {
@@ -186,7 +186,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT start_ts AS \"Start (IST)\", session_id AS \"Session\", host(src_ip) AS \"IP\", country AS \"Country\", classification AS \"Class\", severity AS \"Severity\", actor_type AS \"Actor\", login_attempts AS \"Logins\", commands_count AS \"Cmds\", is_simulated AS \"Sim\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) ORDER BY severity DESC NULLS LAST, start_ts DESC LIMIT 200"
+          "rawSql": "SELECT start_ts AS \"Start (IST)\", session_id AS \"Session\", host(src_ip) AS \"IP\", country AS \"Country\", classification AS \"Class\", severity AS \"Severity\", actor_type AS \"Actor\", login_attempts AS \"Logins\", commands_count AS \"Cmds\", is_simulated AS \"Sim\" FROM honeylens.sessions WHERE $__timeFilter(start_ts) AND (${data:sqlstring} = 'all' OR is_simulated = (${data:sqlstring} = 'simulated')) AND session_id NOT IN (SELECT session_id FROM honeylens.ignored_sessions) ORDER BY severity DESC NULLS LAST, start_ts DESC LIMIT 200"
         }
       ],
       "fieldConfig": {
