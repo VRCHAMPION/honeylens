@@ -18,6 +18,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -64,6 +65,16 @@ def to_csv(d: ReportData, mask_ips: bool = False) -> str:
         url = mask_ips_in_text(r["url"]) if mask_ips else r["url"]
         w.writerow(["url", safe(url), r["attempts"], _stix_time(r["first_seen"]), _stix_time(r["last_seen"]),
                     r["simulated"], "download attempted (never fetched)"])
+    for r in d.ioc_cmd:
+        value = r["value"]
+        if mask_ips:
+            value = mask_ip(value) if r["type"] == "ipv4-addr" else mask_ips_in_text(value)
+        w.writerow([r["type"], safe(value), r["count"], _stix_time(r["first_seen"]), _stix_time(r["last_seen"]),
+                    r["simulated"], r["context"]])
+    for r in d.ioc_paths:
+        # scp uploads: Cowrie stores the local path in the url column. A path is not a URL.
+        w.writerow(["file-path", safe(r["path"]), r["attempts"], _stix_time(r["first_seen"]), _stix_time(r["last_seen"]),
+                    r["simulated"], "file uploaded to the honeypot (local path; see file:sha256 rows)"])
     for r in d.ioc_hashes:
         w.writerow(["file:sha256", r["shasum"], r["seen"], _stix_time(r["first_seen"]), "", r["simulated"], ""])
     return buf.getvalue()
@@ -88,11 +99,19 @@ def to_stix(d: ReportData, mask_ips: bool = False) -> dict[str, Any]:
             "labels": ["simulated" if simulated else "honeypot-observed"],
         })
 
+    seen_ips: set[str] = set()
     if not mask_ips:
         for r in d.ioc_ips:
             kind = "ipv6-addr" if ":" in r["ip"] else "ipv4-addr"
+            seen_ips.add(r["ip"])
             indicator(f"ip:{r['ip']}", f"Honeypot attacker IP {r['ip']}", f"[{kind}:value = '{_esc(r['ip'])}']",
                       r["first_seen"], r["simulated"], f"{r['sessions']} sessions, max severity {r['max_severity']}")
+        for r in d.ioc_cmd:
+            if r["type"] != "ipv4-addr" or r["value"] in seen_ips:
+                continue
+            seen_ips.add(r["value"])
+            indicator(f"ip:{r['value']}", f"IP in attacker command {r['value']}", f"[ipv4-addr:value = '{_esc(r['value'])}']",
+                      r["first_seen"], r["simulated"], f"{r['context']}; {r['count']} commands")
     seen_urls: set[str] = set()
     for r in d.ioc_urls:
         url = mask_ips_in_text(r["url"]) if mask_ips else r["url"]
@@ -101,6 +120,24 @@ def to_stix(d: ReportData, mask_ips: bool = False) -> dict[str, Any]:
         seen_urls.add(url)
         indicator(f"url:{url}", "URL an attacker tried to download (never fetched)",
                   f"[url:value = '{_esc(url)}']", r["first_seen"], r["simulated"], f"{r['attempts']} attempts")
+    seen_domains: set[str] = set()
+    for r in d.ioc_cmd:
+        if r["type"] == "url":
+            url = mask_ips_in_text(r["value"]) if mask_ips else r["value"]
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            indicator(f"url:{url}", "URL in attacker command (never fetched)",
+                      f"[url:value = '{_esc(url)}']", r["first_seen"], r["simulated"], f"{r['context']}; {r['count']} commands")
+        elif r["type"] == "scp-target":
+            # user@host:path is not a URL; export the host. IP hosts are already ipv4-addr rows.
+            host = r["value"].split("@", 1)[1].rsplit(":", 1)[0]
+            if re.fullmatch(r"[0-9.]+", host) or host in seen_domains:
+                continue
+            seen_domains.add(host)
+            indicator(f"domain:{host}", "scp source host in attacker command (never fetched)",
+                      f"[domain-name:value = '{_esc(host)}']", r["first_seen"], r["simulated"],
+                      f"{r['context']}: {r['value']}; {r['count']} commands")
     for r in d.ioc_hashes:
         indicator(f"sha256:{r['shasum']}", "File hash seen on honeypot",
                   f"[file:hashes.'SHA-256' = '{r['shasum']}']", r["first_seen"], r["simulated"], "")

@@ -2,6 +2,10 @@
 
 All queries are parameterized and limited (TOP-N), so the report stays small
 even after months of data.
+
+Sessions from the operator's own IPs (``HL_IGNORE_IPS``, recorded in
+``honeylens.ignored_sessions`` by the pipeline) are left out of EVERY query,
+whatever the data filter.
 """
 
 from __future__ import annotations
@@ -9,6 +13,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
+
+from honeylens.config import Network, Settings
+from honeylens.reporting import iocs
 
 FILTERS = {"all": None, "real": False, "simulated": True}
 
@@ -52,6 +59,8 @@ class ReportData:
     ioc_ips: list[dict[str, Any]] = field(default_factory=list)
     ioc_urls: list[dict[str, Any]] = field(default_factory=list)
     ioc_hashes: list[dict[str, Any]] = field(default_factory=list)
+    ioc_paths: list[dict[str, Any]] = field(default_factory=list)  # scp uploads: local paths, not URLs
+    ioc_cmd: list[dict[str, Any]] = field(default_factory=list)  # IOCs found in command text
     daily: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -61,7 +70,13 @@ def _rows(conn: Any, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
     return [dict(zip(cols, r, strict=True)) for r in cur.fetchall()]
 
 
-SIM = "(%(sim)s::boolean IS NULL OR is_simulated = %(sim)s::boolean)"
+# Every query below gets both: the all/real/simulated filter and the ignore list.
+SIM = ("(%(sim)s::boolean IS NULL OR is_simulated = %(sim)s::boolean) "
+       "AND session_id NOT IN (SELECT session_id FROM honeylens.ignored_sessions)")
+# A download "url" with a scheme. scp uploads are stored with a local path
+# (/home/pi/x) in the url column; those are exported as file paths instead.
+URL_SCHEME = "url ~* '^[a-z][a-z0-9+.-]*://'"
+MAX_IOC_COMMANDS = 2000
 
 
 def _totals(conn: Any, w: Window, sim: bool | None) -> dict[str, Any]:
@@ -81,8 +96,13 @@ def _totals(conn: Any, w: Window, sim: bool | None) -> dict[str, Any]:
     return row
 
 
-def load(conn: Any, end: datetime, days: int = 7, data_filter: str = "all", top: int = 10) -> ReportData:
-    """Run all report queries for the window ending at ``end``."""
+def load(conn: Any, end: datetime, days: int = 7, data_filter: str = "all", top: int = 10,
+         exclude_networks: tuple[Network, ...] | None = None) -> ReportData:
+    """Run all report queries for the window ending at ``end``.
+
+    ``exclude_networks`` are never exported as IOCs from command text; the
+    default is ``HL_IGNORE_IPS`` + ``HL_SENSOR_IP`` from the environment.
+    """
     if data_filter not in FILTERS:
         raise ValueError("data_filter must be all, real or simulated")
     sim = FILTERS[data_filter]
@@ -92,7 +112,8 @@ def load(conn: Any, end: datetime, days: int = 7, data_filter: str = "all", top:
     d.totals = _totals(conn, w, sim)
     d.prev_totals = _totals(conn, w.prev, sim)
     share = _rows(conn, """SELECT count(*) FILTER (WHERE is_simulated) AS s, count(*) AS n FROM honeylens.sessions
-        WHERE start_ts >= %(a)s AND start_ts < %(b)s""", p)[0]
+        WHERE start_ts >= %(a)s AND start_ts < %(b)s
+          AND session_id NOT IN (SELECT session_id FROM honeylens.ignored_sessions)""", p)[0]
     d.sim_share = (share["s"] / share["n"]) if share["n"] else 0.0
     sess = f"FROM honeylens.sessions WHERE start_ts >= %(a)s AND start_ts < %(b)s AND {SIM}"
     d.countries = _rows(conn, f"""SELECT coalesce(nullif(country,''),'Unknown') AS country, country_code,
@@ -125,6 +146,7 @@ def load(conn: Any, end: datetime, days: int = 7, data_filter: str = "all", top:
         s.severity_label, s.actor_type, s.commands_count, s.is_simulated, ss.summary, ss.techniques
         FROM honeylens.sessions s LEFT JOIN honeylens.session_summaries ss USING (session_id)
         WHERE s.start_ts >= %(a)s AND s.start_ts < %(b)s AND (%(sim)s::boolean IS NULL OR s.is_simulated = %(sim)s::boolean)
+          AND s.session_id NOT IN (SELECT session_id FROM honeylens.ignored_sessions)
         ORDER BY s.severity DESC NULLS LAST, s.commands_count DESC, s.start_ts LIMIT 8""", p)
     d.ioc_ips = _rows(conn, f"""SELECT host(src_ip) AS ip, max(country_code) AS country_code, max(asn) AS asn,
         count(*) AS sessions, max(severity) AS max_severity, min(start_ts) AS first_seen, max(end_ts) AS last_seen,
@@ -133,9 +155,20 @@ def load(conn: Any, end: datetime, days: int = 7, data_filter: str = "all", top:
     dl = f"FROM honeylens.downloads WHERE ts >= %(a)s AND ts < %(b)s AND {SIM}"
     d.ioc_urls = _rows(conn, f"""SELECT url, url_host, count(*) AS attempts, count(DISTINCT session_id) AS sessions,
         min(ts) AS first_seen, max(ts) AS last_seen, bool_or(is_simulated) AS simulated
-        {dl} AND url <> '' GROUP BY 1,2 ORDER BY 3 DESC LIMIT 200""", p)
+        {dl} AND {URL_SCHEME} GROUP BY 1,2 ORDER BY 3 DESC LIMIT 200""", p)
+    d.ioc_paths = _rows(conn, f"""SELECT url AS path, count(*) AS attempts, min(ts) AS first_seen, max(ts) AS last_seen,
+        bool_or(is_simulated) AS simulated, array_remove(array_agg(DISTINCT nullif(shasum, '')), NULL) AS shasums
+        {dl} AND url <> '' AND NOT ({URL_SCHEME}) GROUP BY 1 ORDER BY 2 DESC LIMIT 200""", p)
     d.ioc_hashes = _rows(conn, f"""SELECT shasum, count(*) AS seen, min(ts) AS first_seen, bool_or(is_simulated) AS simulated
         {dl} AND shasum <> '' GROUP BY 1 ORDER BY 2 DESC LIMIT 200""", p)
+    if exclude_networks is None:
+        settings = Settings()
+        exclude_networks = settings.ignore_networks + settings.sensor_networks
+    cmd_rows = _rows(conn, f"""SELECT command, count(*) AS times, min(ts) AS first_seen, max(ts) AS last_seen,
+        bool_or(is_simulated) AS simulated {cm} AND command ~ %(ioc_re)s
+        GROUP BY 1 ORDER BY 2 DESC LIMIT {MAX_IOC_COMMANDS}""", {**p, "ioc_re": iocs.SQL_CANDIDATE_REGEX})
+    known = {("ipv4-addr", r["ip"]) for r in d.ioc_ips} | {("url", r["url"]) for r in d.ioc_urls}
+    d.ioc_cmd = [i for i in iocs.aggregate(cmd_rows, exclude_networks) if (i["type"], i["value"]) not in known][:200]
     d.daily = _rows(conn, f"""SELECT date_trunc('day', start_ts AT TIME ZONE 'Asia/Kolkata') AS day, count(*) AS sessions
         {sess} GROUP BY 1 ORDER BY 1""", p)
     return d

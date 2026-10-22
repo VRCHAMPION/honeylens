@@ -112,9 +112,11 @@ ul.take li{margin:4px 0}footer{margin-top:36px;padding-top:8px;border-top:1px so
 <td>{{ summary(s.summary) }}<br>{% for t in s.techniques or [] %}<span class="tag">{{ t }}</span>{% endfor %}</td></tr>{% endfor %}</table>
 
 <h2>6. Indicators of compromise (IOCs)</h2>
-<p class="muted">Defanged so nothing is clickable. Full machine-readable lists: <code>iocs.csv</code>, <code>iocs.stix.json</code>. HoneyLens never downloads these URLs.</p>
+<p class="muted">Defanged so nothing is clickable. Full machine-readable lists: <code>iocs.csv</code>, <code>iocs.stix.json</code>. HoneyLens never downloads these URLs. "In command" rows were found in the text of attacker commands (for example a payload piped straight into a shell, which Cowrie does not log as a download); private and reserved addresses, the honeypot's own IP and ignored IPs are left out. Uploaded file paths are local paths on the honeypot, not URLs; their SHA-256 hashes are listed separately.</p>
 <table><tr><th>Type</th><th>Value</th><th class="num">Count</th><th>First seen (IST)</th></tr>
 {% for r in d.ioc_urls[:15] %}<tr><td>URL</td><td><code>{{ defang(r.url) }}</code></td><td class="num">{{ r.attempts }}</td><td>{{ ist(r.first_seen) }}</td></tr>{% endfor %}
+{% for r in d.ioc_cmd[:20] %}<tr><td>{{ {'url': 'URL in command', 'ipv4-addr': 'IP in command', 'scp-target': 'scp source in command'}[r.type] }}</td><td><code>{% if r.type == 'ipv4-addr' %}{{ ip(r.value) }}{% else %}{{ defang(r.value) }}{% endif %}</code></td><td class="num">{{ r.count }}</td><td>{{ ist(r.first_seen) }}</td></tr>{% endfor %}
+{% for r in d.ioc_paths[:10] %}<tr><td>Uploaded file path</td><td><code>{{ r.path }}</code></td><td class="num">{{ r.attempts }}</td><td>{{ ist(r.first_seen) }}</td></tr>{% endfor %}
 {% for r in d.ioc_hashes[:10] %}<tr><td>SHA-256</td><td><code>{{ r.shasum }}</code></td><td class="num">{{ r.seen }}</td><td>{{ ist(r.first_seen) }}</td></tr>{% endfor %}
 {% for r in d.ioc_ips[:15] %}<tr><td>IP</td><td><code>{{ ip(r.ip) }}</code></td><td class="num">{{ r.sessions }}</td><td>{{ ist(r.first_seen) }}</td></tr>{% endfor %}
 </table>
