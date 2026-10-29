@@ -24,10 +24,10 @@ dev = [
   "setuptools>=83.0.0",       # keep the test/build environment off vulnerable old bootstrap versions
   "pytest==9.1.1",
   "pytest-cov==7.1.0",
-  "ruff==0.16.10",
+  "ruff==0.17.2",
   "bandit==1.9.4",
   "pip-audit==2.10.1",
-  "pre-commit==4.6.2",
+  "pre-commit==4.7.0",
   "stix2==3.0.2",             # OASIS STIX 2.1 library: validates our STIX exports in tests/CI
 ]
 
