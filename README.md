@@ -16,6 +16,24 @@ STIX 2.1 and ATT&CK Navigator formats.
 
 > All dashboard data in the screenshots comes from the built-in simulator, not real attackers.
 
+> **Live deployment: Azure.** HoneyLens has been deployed and verified on an Azure for Students VM.
+> See [DEPLOY_CLOUD.md](DEPLOY_CLOUD.md) for the cloud setup.
+
+---
+
+## Contents
+
+- [How to use this repo](#how-to-use-this-repo)
+- [Architecture](#architecture)
+- [Features](#features)
+- [By the numbers](#by-the-numbers)
+- [Safety](#safety)
+- [Limitations](#limitations)
+- [Design decisions & what I learned](#design-decisions--what-i-learned)
+- [Roadmap](#roadmap)
+- [Documentation](#documentation)
+- [Attribution](#attribution)
+
 ---
 
 ## How to use this repo

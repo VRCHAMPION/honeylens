@@ -2,6 +2,10 @@
 
 All notable changes to HoneyLens. Dates are in IST.
 
+## 2026-11-05 - documentation
+
+- README: added a table of contents and a note on the verified Azure for Students deployment.
+
 ## Unreleased - real-data fix pass
 
 Fixes found by running HoneyLens on a real cloud VM (Azure for Students) for two weeks.
