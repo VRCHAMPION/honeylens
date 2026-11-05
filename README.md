@@ -12,9 +12,9 @@ event. It cleans each event, adds location and network information, maps attacke
 **Grafana** dashboards plus a weekly HTML report with IOC (Indicator of Compromise) exports in CSV,
 STIX 2.1 and ATT&CK Navigator formats.
 
-![SOC Overview dashboard (simulated data)](docs/screenshots/01-soc-overview.png)
+![SOC Overview dashboard with 25 days of REAL attack data](docs/screenshots/real/01-soc-overview.png)
 
-> All dashboard data in the screenshots comes from the built-in simulator, not real attackers.
+> Screenshot: **REAL** attacker traffic from 25 days on Azure (source IPs blurred). See [Real-world results](#real-world-results).
 
 > **Live deployment: Azure.** HoneyLens has been deployed and verified on an Azure for Students VM.
 > See [DEPLOY_CLOUD.md](DEPLOY_CLOUD.md) for the cloud setup.
@@ -26,6 +26,7 @@ STIX 2.1 and ATT&CK Navigator formats.
 - [How to use this repo](#how-to-use-this-repo)
 - [Architecture](#architecture)
 - [Features](#features)
+- [Real-world results](#real-world-results)
 - [By the numbers](#by-the-numbers)
 - [Safety](#safety)
 - [Limitations](#limitations)
@@ -171,6 +172,54 @@ More diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | Dashboards | SOC Overview, Credentials & Commands, ATT&CK & Behaviour, Session Explorer, Pipeline Health | `grafana/` |
 | Report | weekly HTML report, IP masking, CSV, STIX 2.1 (incl. IOCs found in command text), Navigator layer | `src/honeylens/reporting/` |
 
+## Real-world results
+
+HoneyLens ran as an internet-facing SSH honeypot on an Azure for Students VM from **11 Oct to 5 Nov 2026**
+(25 days). Every number here is **REAL** attacker traffic; my own test IPs are excluded with `HL_IGNORE_IPS`.
+
+| Metric | Value |
+|---|---|
+| SSH sessions | 215,054 |
+| Unique source IPs | ~4,680 |
+| Login attempts | ~210,000 |
+| Fake logins that "succeeded" | 832 |
+| Attacker commands captured | 2,626 |
+| Raw events ingested | 1.07 million (0 duplicates, 0 malformed) |
+| ATT&CK technique matches | 2,542 across 13 techniques |
+| High-severity sessions | 39 |
+| Cloud cost | about Rs 286, covered by Azure for Students credit |
+
+**What the attackers did**
+
+- **SSH key backdoor campaign:** the same 19-command script, run from India, China, Kuwait, Singapore,
+  Senegal and Argentina, removed `.ssh`, planted its own key in `authorized_keys` (T1098.004) and
+  changed the root password.
+- **Malware droppers:** bots uploaded hidden files (`.16`, `.b0s`) over SCP and used `sudo` to make them
+  executable. 4 unique SHA-256 hashes were captured; nothing was ever executed.
+- **Honeypot detection:** 70 sessions ran scripts that test whether the shell is fake (T1497.001).
+- **Credentials:** the top password was `123456` (7,257 tries); attackers even guessed the cloud
+  default username `azureuser` 1,177 times.
+
+**Real data made the tool better.** The first weeks showed the rules missing real attacks, so I rewrote
+them and re-scored all history with `honeylens-rescore` (raw evidence untouched):
+
+| Label | Before | After |
+|---|---|---|
+| Brute-forcer (now judged per IP, not per session) | 1,560 | 192,398 |
+| Honeypot-prober | 1 | 70 |
+| High severity | 9 | 39 |
+
+191,027 sessions were re-scored in 494 seconds.
+
+| | |
+|---|---|
+| ![Credentials and commands](docs/screenshots/real/02-credentials-commands.png) | ![ATT&CK and behaviour](docs/screenshots/real/03-attack-behaviour.png) |
+| ![Session explorer](docs/screenshots/real/04-session-explorer.png) | ![Pipeline health](docs/screenshots/real/05-pipeline-health.png) |
+
+Known gaps from this run: the newer SCP-upload dropper still scores only 43 (medium) because
+`scp -qt` uploads have no rule yet, and two Grafana panels (Batch duration, Download attempts) showed
+no data on the live VM.
+
 ## By the numbers
 
 | Number | Where it comes from |
@@ -183,9 +232,10 @@ More diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | ~5,100-5,900 events/s ingest | `scripts/perf_test.py` on a 2-vCPU ARM64 VM, pipeline and PostgreSQL on the same machine; details in [docs/BENCHMARKS.md](docs/BENCHMARKS.md) |
 
 Trivy's non-gating report lists the HIGH/CRITICAL CVEs in the images; the gate fails the build on any
-fixable CRITICAL in the HoneyLens image. HoneyLens has run on a real cloud VM (Azure for Students)
-since October 2026 and collects real attacker data, but every included sample and screenshot is
-still **SIMULATED**; real findings will be published after a privacy review.
+fixable CRITICAL in the HoneyLens image. HoneyLens ran on a real cloud VM (Azure for Students)
+from 11 Oct to 5 Nov 2026; the results are in [Real-world results](#real-world-results). The
+included sample files in `docs/samples` and the screenshots in `docs/screenshots` are **SIMULATED**;
+those in `docs/screenshots/real` are **REAL** (source IPs blurred).
 
 ## Safety
 
@@ -205,7 +255,7 @@ everywhere, and attacker URLs are never downloaded. See [SECURITY.md](SECURITY.m
 ## Limitations
 
 HoneyLens is a low-interaction SSH honeypot and a learning/research pipeline. Its emulated shell is
-not a real server. The included events and screenshots are **SIMULATED**; a single deployment sees
+not a real server. The included sample events are **SIMULATED**; a single deployment sees
 only the actors that choose to connect to that address. ATT&CK matches are explainable regex
 indicators with false positives and false negatives, severity is a heuristic, and GeoIP describes
 network registration rather than a person's identity. The cloud deployment is **VERIFIED** on Azure
