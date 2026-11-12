@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 authors = [{ name = "Krrish Bhanushali" }]
 # Minimal runtime dependencies (each one is attack surface and maintenance):
 dependencies = [
-  "psycopg[binary]==3.3.6",   # PostgreSQL driver
+  "psycopg[binary]==3.3.8",   # PostgreSQL driver
   "PyYAML==6.0.2",            # ATT&CK rule files
   "maxminddb==3.2.0",         # read local GeoIP .mmdb files
   "paramiko==5.0.0",          # SSH client for the live simulator
